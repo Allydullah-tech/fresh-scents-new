@@ -3,75 +3,372 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FRESH SCENTS — Mfumo wa Ndani wa Duka</title>
-<link rel="stylesheet" href="css/admin.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<title>FRESH SCENTS — Manukato ya Kifahari, Mbeya</title>
+<meta name="description" content="Manukato ya kifahari kutoka Fresh Scents, Mbeya. Chagua harufu yako na uagize kupitia WhatsApp.">
 <link rel="icon" href="images/logo.jpeg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Hanken+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <style>
-  html, body { height: 100%; }
-  body {
-    margin: 0;
-    display: flex; align-items: center; justify-content: center;
-    text-align: center;
-    background:
-      linear-gradient(135deg, rgba(26,20,8,.90), rgba(43,33,24,.85)),
-      url('images/logo.jpeg');
-    background-size: cover;
-    background-position: center 20%;
-    color: #f2e9cf;
-  }
-  .hero-inner { max-width: 480px; padding: 40px 24px; }
-  .hero-inner .logo-badge {
-    width: 110px; margin: 0 auto 22px;
-    filter: drop-shadow(0 6px 20px rgba(201,162,39,.5));
-  }
-  .hero-inner h1 { font-size: 30px; color: #fff; margin: 8px 0 4px; letter-spacing: .5px; }
-  .hero-inner h1 span { color: var(--gold-light); }
-  .hero-inner p.tagline { font-size: 14.5px; color: #e7dcb9; margin-bottom: 30px; }
-  .hero-btns { display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
-  .btn-hero {
-    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 13px 26px; border-radius: 999px; border: none;
-    font-weight: 700; font-size: 15px; cursor: pointer; text-decoration: none;
-    transition: .2s;
-  }
-  .btn-hero.gold { background: linear-gradient(90deg, var(--gold-light), var(--gold)); color: #241b06; }
-  .btn-hero.gold:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(201,162,39,.4); }
-  .btn-hero.outline { background: transparent; border: 2px solid var(--gold-light); color: #f2e9cf; }
-  .btn-hero.outline:hover { background: var(--gold-light); color: #241b06; }
-  @media (max-width: 480px) { .hero-inner h1 { font-size: 24px; } }
+:root{
+  --ivory:#fbf7ee; --paper:#f1e9d6; --oud:#20160e; --oud-2:#2e2015;
+  --gold:#b8902a; --gold-l:#e3c46a; --gold-text:#7d5f14; --ink:#3a2f1c; --muted:#6f6247;
+  --champ:#f4e8c2; --gold-d:#8a6d1f;
+  --serif:'Cormorant Garamond',Georgia,'Times New Roman',serif;
+  --sans:'Hanken Grotesk','Segoe UI',Roboto,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--ivory);color:var(--ink);font:16px/1.65 var(--sans)}
+a{color:inherit}
+img{max-width:100%}
+h1,h2,h3{font-family:var(--serif);font-weight:600;line-height:1.08;margin:0;color:var(--oud)}
+h2{font-size:clamp(32px,4.6vw,52px);letter-spacing:-.01em}
+:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+.wrap{max-width:1160px;margin:0 auto;padding:0 24px}
+section{padding:96px 0}
+.lead{max-width:56ch;color:var(--muted);font-size:17px}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;padding:14px 26px;border-radius:999px;border:1.5px solid transparent;font:700 15px var(--sans);text-decoration:none;cursor:pointer;transition:background .2s,color .2s,transform .2s}
+.btn-wa{background:linear-gradient(90deg,var(--gold-l),var(--gold));color:#241b06;box-shadow:0 8px 20px -10px rgba(138,109,31,.7)}
+.btn-wa:hover{transform:translateY(-2px);box-shadow:0 12px 24px -10px rgba(138,109,31,.8)}
+.btn-gold{background:linear-gradient(90deg,var(--gold-l),var(--gold));color:#241b06}
+.btn-gold:hover{transform:translateY(-2px)}
+.btn-line{border-color:var(--oud);color:var(--oud);background:transparent}
+.btn-line:hover{background:var(--oud);color:var(--ivory)}
+.btn-dark{background:#241b06;color:#f6e7ae}
+.btn-dark:hover{transform:translateY(-2px)}
+.btn-sm{padding:10px 18px;font-size:14px}
+
+/* top bar + nav */
+.topbar{background:linear-gradient(90deg,#ecd58a,#f6e7ae 50%,#ecd58a);color:#3a2a05;font-size:13.5px;text-align:center;padding:8px 16px}
+.topbar a{color:#3a2a05;font-weight:700;text-decoration:none}
+nav{position:sticky;top:0;z-index:20;background:rgba(251,247,238,.92);backdrop-filter:blur(10px);border-bottom:1px solid #e6dcc0}
+.nav-in{display:flex;align-items:center;gap:28px;height:68px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font:600 22px var(--serif);color:var(--oud);letter-spacing:.04em}
+.brand img{width:44px;height:44px;border-radius:50%;object-fit:cover}
+.nav-links{display:flex;gap:26px;margin-left:auto}
+.nav-links a{text-decoration:none;font-weight:500;font-size:15px;color:var(--ink)}
+.nav-links a:hover{color:var(--gold-text)}
+
+/* hero */
+.hero{padding:64px 0 88px;background:radial-gradient(900px 500px at 85% 20%,#f4e7bf 0,transparent 60%),var(--ivory)}
+.hero-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:56px;align-items:center}
+.hero h1{font-size:clamp(46px,7vw,86px);letter-spacing:-.02em}
+.hero h1 em{font-style:italic;color:var(--gold-text);font-weight:500}
+.hero .lead{margin:24px 0 32px}
+.cta-row{display:flex;flex-wrap:wrap;gap:14px}
+.facts{display:flex;flex-wrap:wrap;gap:12px 30px;margin:38px 0 0;padding:0;list-style:none;font-size:14.5px;color:var(--muted)}
+.facts li{display:flex;align-items:center;gap:8px}
+.facts i{color:var(--gold)}
+.arch{position:relative;width:min(100%,430px);margin-left:auto;aspect-ratio:3/4;border-radius:999px 999px 20px 20px;overflow:hidden;
+  background:linear-gradient(180deg,#fffdf6,#f3e8c6);border:1.5px solid var(--gold);box-shadow:0 30px 60px -28px rgba(125,95,20,.5);animation:rise 1.4s cubic-bezier(.2,.7,.2,1) both}
+.arch img{position:absolute;left:50%;top:46%;width:150%;max-width:none;transform:translate(-50%,-50%);mix-blend-mode:multiply}
+.arch::after{content:"";position:absolute;inset:10px;border-radius:999px 999px 12px 12px;border:1px solid rgba(184,144,42,.45);pointer-events:none}
+@keyframes rise{from{clip-path:inset(100% 0 0 0)}to{clip-path:inset(0 0 0 0)}}
+.hero h1,.hero .lead,.cta-row{animation:fadein .9s .5s ease both}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+
+/* collections */
+.collections{background:var(--paper)}
+.sec-head{display:flex;justify-content:space-between;align-items:end;gap:24px;flex-wrap:wrap;margin-bottom:44px}
+.grid{display:grid;grid-template-columns:1.15fr 1fr;grid-template-rows:auto auto;gap:22px}
+.card{border:1.5px solid #e2cf92;border-radius:22px;padding:30px;display:grid;grid-template-columns:1fr 130px;gap:18px;align-items:center;background:var(--tint)}
+.card.feature{grid-row:span 2;grid-template-columns:1fr;background:linear-gradient(160deg,#e9cd78,#f7e9b4 50%,#dcb54f);color:#3a2a05;border:1.5px solid var(--gold);text-align:center;padding:44px 32px}
+.card.feature h3{color:#241b06;font-size:44px}
+.card.feature .muted{color:#5a4712}
+.card h3{font-size:32px}
+.card .muted{color:var(--muted);font-size:15px;margin:6px 0 14px}
+.sizes{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 18px;padding:0;list-style:none}
+.feature .sizes{justify-content:center}
+.sizes li{font-size:13px;font-weight:700;padding:3px 11px;border-radius:999px;border:1px solid currentColor;opacity:.75}
+.bottle{width:100%;height:auto;display:block}
+.feature .bottle{width:190px;margin:0 auto 20px}
+
+/* finder */
+.finder{background:linear-gradient(135deg,#f1dfa0,#f8edc6 55%,#ecd68b);color:var(--ink)}
+.finder h2{color:var(--oud)}
+.finder .lead{color:#5a4712}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
+.opts{display:grid;gap:12px;margin-top:30px}
+.opt{display:flex;align-items:center;gap:14px;text-align:left;width:100%;padding:16px 20px;border-radius:14px;background:transparent;border:1.5px solid var(--gold);color:var(--oud);font:500 16px var(--sans);cursor:pointer;transition:border-color .2s,background .2s}
+.opt i{font-size:20px;color:var(--gold-d)}
+.opt:hover{background:rgba(255,255,255,.55)}
+.opt[aria-pressed=true]{background:linear-gradient(90deg,var(--gold-l),var(--gold));border-color:var(--gold);color:#241b06}
+.opt[aria-pressed=true] i{color:#241b06}
+.result{background:#fffdf8;border:1.5px solid var(--gold);color:var(--ink);border-radius:22px;padding:36px;min-height:340px;display:flex;flex-direction:column;justify-content:center}
+.result h3{font-size:38px;margin:4px 0 8px}
+.result .why{color:var(--muted);margin:0 0 22px}
+.result .empty{color:var(--muted);font-family:var(--serif);font-size:26px;line-height:1.3}
+.result.pop{animation:pop .45s ease}
+@keyframes pop{from{transform:translateY(10px);opacity:.3}to{transform:none;opacity:1}}
+.notes{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.notes span{background:var(--paper);padding:4px 13px;border-radius:999px;font-size:14px;font-weight:500}
+
+/* how to order */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:48px;counter-reset:s;border-top:1px solid #d9cba5}
+.step{padding:30px 28px 0 0;counter-increment:s}
+.step::before{content:counter(s);display:block;font:600 56px/1 var(--serif);color:var(--gold);margin-bottom:12px}
+.step h3{font-size:26px;margin-bottom:6px}
+.step p{margin:0;color:var(--muted);max-width:32ch}
+
+/* gift band */
+.gift{background:linear-gradient(110deg,#d9b24f,#f0d58a 55%,#d9b24f);padding:72px 0}
+.gift-in{display:flex;justify-content:space-between;align-items:center;gap:30px;flex-wrap:wrap}
+.gift h2{max-width:18ch;color:#241b06}
+.gift p{margin:12px 0 0;max-width:46ch;color:#4a3a10}
+
+/* footer */
+footer{background:var(--champ);color:#4a3a10;padding:72px 0 28px;border-top:3px solid var(--gold)}
+.f-grid{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:40px}
+footer h3{color:var(--oud);font-size:24px;margin-bottom:14px}
+footer .brand{color:var(--oud);margin-bottom:14px}
+footer ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+footer a{text-decoration:none}
+footer a:hover{color:var(--gold-d)}
+footer li i{color:var(--gold-d);margin-right:9px}
+.copy{margin-top:48px;padding-top:22px;border-top:1px solid #d9c27a;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;font-size:13.5px}
+
+.fab{position:fixed;right:18px;bottom:18px;z-index:30;width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,var(--gold-l),var(--gold));color:#241b06;display:grid;place-items:center;font-size:30px;box-shadow:0 10px 24px rgba(0,0,0,.3);text-decoration:none}
+
+@media (max-width:900px){
+  section{padding:68px 0}
+  .nav-links{display:none}
+  .nav-in .btn{margin-left:auto}
+  .hero-grid,.fgrid,.grid,.steps,.f-grid{grid-template-columns:1fr}
+  .hero{padding-top:36px}
+  .arch{margin:0 auto;width:min(86%,340px);order:-1}
+  .card.feature{grid-row:auto}
+  .step{padding-bottom:26px}
+  .step p{max-width:none}
+}
+@media (max-width:520px){
+  .card{grid-template-columns:1fr 96px;padding:24px}
+  .brand span{font-size:19px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
 </style>
 </head>
 <body>
-  <div class="hero-inner">
-    <img class="logo-badge" src="images/logo.jpeg" alt="Logo">
-    <h1 id="shopNameHeading">Karibu <span>FRESH SCENTS</span></h1>
-    <p class="tagline" id="taglineText">Mfumo wa Ndani wa Duka</p>
-    <div class="hero-btns" id="actionButtons">
-      <a href="login.html" class="btn-hero gold"><i class="bi bi-box-arrow-in-right"></i> Ingia Kwenye Mfumo</a>
+<div class="topbar">Agiza moja kwa moja: <a id="topPhone" href="#"></a></div>
+
+<nav>
+  <div class="wrap nav-in">
+    <a href="#juu" class="brand"><img src="images/logo.jpeg" alt=""><span id="brandName">FRESH SCENTS</span></a>
+    <div class="nav-links">
+      <a href="#makusanyo">Makusanyo</a>
+      <a href="#tafuta">Tafuta harufu yako</a>
+      <a href="#kuagiza">Jinsi ya kuagiza</a>
+      <a href="#wasiliana">Wasiliana</a>
+    </div>
+    <a class="btn btn-wa btn-sm" data-wa="Habari Fresh Scents, nahitaji msaada kuchagua manukato."><i class="bi bi-whatsapp"></i> WhatsApp</a>
+  </div>
+</nav>
+
+<header class="hero" id="juu">
+  <div class="wrap hero-grid">
+    <div>
+      <h1>Harufu inayokutambulisha kabla hujasema <em>neno.</em></h1>
+      <p class="lead">Manukato ya kifahari yaliyochaguliwa kwa ustadi, yanayodumu mwili mzima siku nzima. Chagua unayoipenda, tutumie ujumbe, nasi tutakujibu haraka.</p>
+      <div class="cta-row">
+        <a class="btn btn-wa" data-wa="Habari Fresh Scents, nataka kuagiza manukato."><i class="bi bi-whatsapp"></i> Agiza kwenye WhatsApp</a>
+        <a class="btn btn-line" href="#tafuta">Tafuta harufu yako</a>
+      </div>
+      <ul class="facts">
+        <li><i class="bi bi-droplet-half"></i> 30ml, 50ml na 100ml</li>
+        <li><i class="bi bi-gift"></i> Zawadi iliyofungwa vizuri</li>
+        <li><i class="bi bi-geo-alt"></i> Mbeya, Tanzania</li>
+      </ul>
+    </div>
+    <div class="arch"><img src="images/logo.jpeg" alt="Nembo ya Fresh Scents yenye taji ya dhahabu"></div>
+  </div>
+</header>
+
+<section class="collections" id="makusanyo">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Makusanyo yetu</h2>
+      <p class="lead">Harufu tatu, hisia tatu tofauti. Uliza ukubwa na bei kupitia WhatsApp.</p>
+    </div>
+    <div class="grid" id="productGrid"></div>
+  </div>
+</section>
+
+<section class="finder" id="tafuta">
+  <div class="wrap fgrid">
+    <div>
+      <h2>Huna uhakika wa kuchagua?</h2>
+      <p class="lead" style="margin-top:16px">Tuambie unapenda harufu ya aina gani, nasi tukupendekezee.</p>
+      <div class="opts" id="opts"></div>
+    </div>
+    <div class="result" id="result" aria-live="polite">
+      <p class="empty">Chagua aina ya harufu upande wa kushoto, na pendekezo lako litaonekana hapa.</p>
     </div>
   </div>
+</section>
+
+<section id="kuagiza">
+  <div class="wrap">
+    <h2>Jinsi ya kuagiza</h2>
+    <div class="steps">
+      <div class="step"><h3>Chagua harufu</h3><p>Tazama makusanyo au tumia kitafuta harufu hapo juu.</p></div>
+      <div class="step"><h3>Tutumie ujumbe</h3><p>Bonyeza kitufe cha WhatsApp. Ujumbe unakuwa tayari umeandikwa.</p></div>
+      <div class="step"><h3>Pokea manukato yako</h3><p>Tunakubaliana ukubwa, bei na namna ya kukupatia.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="gift">
+  <div class="wrap gift-in">
+    <div>
+      <h2>Zawadi ambayo hupatikani kusahaulika</h2>
+      <p>Mpe mpendwa wako harufu atakayoikumbuka kila anapoivaa. Tuambie bajeti yako, tutakushauri.</p>
+    </div>
+    <a class="btn btn-gold" style="background:#fffdf8;color:#241b06" data-wa="Habari Fresh Scents, nahitaji manukato kwa ajili ya zawadi."><i class="bi bi-gift"></i> Omba ushauri wa zawadi</a>
+  </div>
+</section>
+
+<footer id="wasiliana">
+  <div class="wrap">
+    <div class="f-grid">
+      <div>
+        <div class="brand"><img src="images/logo.jpeg" alt=""><span id="footName">FRESH SCENTS</span></div>
+        <p id="taglineText" style="margin:0;max-width:34ch">Harufu Nzuri, Hadhi Ya Kifalme</p>
+      </div>
+      <div>
+        <h3>Wasiliana nasi</h3>
+        <ul>
+          <li><i class="bi bi-telephone"></i><a id="footPhone" href="#"></a></li>
+          <li><i class="bi bi-whatsapp"></i><a data-wa="Habari Fresh Scents.">Tuma ujumbe WhatsApp</a></li>
+          <li><i class="bi bi-geo-alt"></i><span id="footAddr"></span></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Viungo</h3>
+        <ul>
+          <li><a href="#makusanyo">Makusanyo</a></li>
+          <li><a href="#tafuta">Tafuta harufu yako</a></li>
+          <li><a href="#kuagiza">Jinsi ya kuagiza</a></li>
+          <li><a id="staffLink" href="login.html"><i class="bi bi-box-arrow-in-right" style="margin-right:6px"></i>Ingia (wafanyakazi)</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="copy"><span>&copy; <span id="yr"></span> <span id="copyName">FRESH SCENTS</span>. Haki zote zimehifadhiwa.</span></div>
+  </div>
+</footer>
+
+<a class="fab" data-wa="Habari Fresh Scents, nahitaji msaada." aria-label="Wasiliana nasi kwenye WhatsApp"><i class="bi bi-whatsapp"></i></a>
 
 <script src="js/api.js"></script>
 <script>
-async function loadLandingInfo() {
-  const r = await apiGet('install.php', { action: 'status' });
-  if (!r.success) return;
+/* ===== Hariri hapa: namba, anwani na bidhaa ===== */
+const SHOP = { phone: '0621002091', wa: '255621002091', address: 'Mbeya, Tanzania' };
+const PRODUCTS = [
+  { id:'oud',  name:'Fresh Scents Royal Oud', feature:true, liquid:'#b8860b', tint:'#f7ecc9',
+    notes:['Oud','Vanila','Kahawia ya joto'], sizes:['30ml','50ml','100ml'],
+    blurb:'Harufu ya kifalme yenye oud na vanila, hukaa muda mrefu.',
+    why:'Una joto na kina. Inafaa jioni, harusini na hafla maalum.' },
+  { id:'ice',  name:'Fresh Scents Blue Ice', liquid:'#ecdba0', tint:'#fffdf8',
+    notes:['Baridi','Safi','Machungwa'], sizes:['30ml','50ml','100ml'],
+    blurb:'Harufu safi na ya baridi, nzuri kwa matumizi ya kila siku.',
+    why:'Ni nyepesi na safi. Inakufaa kazini na mchana wenye jua.' },
+  { id:'rose', name:'Fresh Scents Rose Elegance', liquid:'#d9a98f', tint:'#faf0d6',
+    notes:['Waridi','Jasmine','Maua laini'], sizes:['30ml','50ml','100ml'],
+    blurb:'Harufu ya kike yenye mchanganyiko wa waridi na jasmine.',
+    why:'Ina umaridadi wa maua. Inafaa kwa miadi, sherehe na zawadi.' }
+];
+const FINDER = [
+  { icon:'bi-fire',     label:'Joto, kina na hadhi',   pick:'oud'  },
+  { icon:'bi-snow2',    label:'Safi na baridi',        pick:'ice'  },
+  { icon:'bi-flower1',  label:'Maua laini na umaridadi', pick:'rose' }
+];
 
-  if (r.shop_name) {
-    document.getElementById('shopNameHeading').innerHTML = `Karibu <span>${r.shop_name}</span>`;
-  }
-  if (r.shop_tagline) {
-    document.getElementById('taglineText').textContent = r.shop_tagline;
-  }
+const wa = msg => `https://wa.me/${SHOP.wa}?text=${encodeURIComponent(msg)}`;
+const bottle = (c, uid) => `
+<svg class="bottle" viewBox="0 0 120 170" role="img" aria-label="Chupa ya manukato">
+  <defs>
+    <linearGradient id="g${uid}" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".5" stop-color="#fff" stop-opacity=".05"/><stop offset="1" stop-color="#fff" stop-opacity=".35"/></linearGradient>
+    <linearGradient id="c${uid}" x1="0" x2="1"><stop offset="0" stop-color="#8a6d1f"/><stop offset=".5" stop-color="#e8c85a"/><stop offset="1" stop-color="#8a6d1f"/></linearGradient>
+  </defs>
+  <rect x="44" y="6" width="32" height="30" rx="4" fill="url(#c${uid})"/>
+  <rect x="52" y="34" width="16" height="12" fill="#b8902a"/>
+  <rect x="14" y="46" width="92" height="116" rx="16" fill="${c}" fill-opacity=".92" stroke="#b8902a" stroke-width="2"/>
+  <rect x="14" y="46" width="92" height="116" rx="16" fill="url(#g${uid})"/>
+  <rect x="32" y="84" width="56" height="44" rx="4" fill="#fff" fill-opacity=".85"/>
+  <path d="M60 94l4 8h-8z M44 114h32" stroke="#8a6d1f" stroke-width="1.6" fill="none"/>
+</svg>`;
 
-  if (!r.installed) {
-    document.getElementById('actionButtons').innerHTML = `
-      <a href="install.html" class="btn-hero gold"><i class="bi bi-gear"></i> Sakinisha Mfumo</a>
-    `;
-  }
+function renderProducts(){
+  document.getElementById('productGrid').innerHTML = PRODUCTS.map((p,i) => `
+    <article class="card ${p.feature?'feature':''}" style="--tint:${p.tint}">
+      ${p.feature ? bottle(p.liquid,i) : ''}
+      <div>
+        <h3>${p.name}</h3>
+        <p class="muted">${p.blurb}</p>
+        <ul class="sizes">${p.sizes.map(s=>`<li>${s}</li>`).join('')}</ul>
+        <a class="btn ${p.feature?'btn-dark':'btn-line'} btn-sm" data-wa="Habari Fresh Scents, nataka kuagiza ${p.name}. Naomba ukubwa na bei.">
+          <i class="bi bi-whatsapp"></i> Agiza ${p.feature?'sasa':''}</a>
+      </div>
+      ${p.feature ? '' : bottle(p.liquid,i)}
+    </article>`).join('');
 }
-loadLandingInfo();
+
+function renderFinder(){
+  const opts = document.getElementById('opts');
+  opts.innerHTML = FINDER.map((f,i)=>`<button class="opt" type="button" aria-pressed="false" data-i="${i}"><i class="bi ${f.icon}"></i>${f.label}</button>`).join('');
+  opts.addEventListener('click', e => {
+    const b = e.target.closest('.opt'); if (!b) return;
+    opts.querySelectorAll('.opt').forEach(o => o.setAttribute('aria-pressed', o === b));
+    const p = PRODUCTS.find(x => x.id === FINDER[b.dataset.i].pick);
+    const r = document.getElementById('result');
+    r.innerHTML = `
+      <p style="margin:0;color:var(--gold-text);font-weight:700">Tunakupendekezea</p>
+      <h3>${p.name}</h3>
+      <p class="why">${p.why}</p>
+      <div class="notes">${p.notes.map(n=>`<span>${n}</span>`).join('')}</div>
+      <div><a class="btn btn-wa" data-wa="Habari Fresh Scents, kitafuta harufu kimenipendekezea ${p.name}. Naomba ukubwa na bei."><i class="bi bi-whatsapp"></i> Agiza ${p.name.replace('Fresh Scents ','')}</a></div>`;
+    r.classList.remove('pop'); void r.offsetWidth; r.classList.add('pop');
+    bindWa();
+  });
+}
+
+function bindWa(){
+  document.querySelectorAll('[data-wa]').forEach(a => {
+    a.href = wa(a.dataset.wa); a.target = '_blank'; a.rel = 'noopener';
+  });
+}
+
+function setShop(name){
+  ['brandName','footName','copyName'].forEach(id => document.getElementById(id).textContent = name);
+  document.title = `${name} — Manukato ya Kifahari`;
+}
+
+/* Taarifa za duka kutoka kwenye mfumo (jina, tagline, hali ya usakinishaji) */
+async function loadLandingInfo(){
+  try {
+    const r = await apiGet('install.php', { action: 'status' });
+    if (!r.success) return;
+    if (r.shop_name) setShop(r.shop_name);
+    if (r.shop_tagline) document.getElementById('taglineText').textContent = r.shop_tagline;
+    if (!r.installed) {
+      const s = document.getElementById('staffLink');
+      s.href = 'install.html';
+      s.innerHTML = '<i class="bi bi-gear" style="margin-right:6px"></i>Sakinisha mfumo';
+    }
+  } catch (e) { /* ukurasa unaendelea kufanya kazi bila backend */ }
+}
+
+(function init(){
+  const tel = SHOP.phone.replace(/^0(\d{3})(\d{3})(\d{3})$/, '0$1 $2 $3');
+  ['topPhone','footPhone'].forEach(id => { const a = document.getElementById(id); a.textContent = tel; a.href = 'tel:+' + SHOP.wa; });
+  document.getElementById('footAddr').textContent = SHOP.address;
+  document.getElementById('yr').textContent = new Date().getFullYear();
+  renderProducts(); renderFinder(); bindWa(); loadLandingInfo();
+})();
 </script>
 </body>
 </html>
