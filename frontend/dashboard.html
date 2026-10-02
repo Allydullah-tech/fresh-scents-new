@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashibodi - FRESH SCENTS</title>
+<link rel="stylesheet" href="css/admin.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="icon" href="images/logo.jpeg">
+</head>
+<body>
+<div class="admin-wrap" id="adminWrap"></div>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script>
+const activityIcons = {
+  sale: { icon: 'bi-bag-check-fill', color: 'var(--success, #166534)', label: 'Mauzo' },
+  damage: { icon: 'bi-exclamation-diamond-fill', color: 'var(--danger)', label: 'Uharibifu' },
+  stock_in: { icon: 'bi-box-arrow-in-down', color: 'var(--info, #1d4ed8)', label: 'Stock Mpya' },
+};
+
+async function loadPage() {
+  const admin = await initAdminShell({ activePage: 'dashboard.html', pageTitle: 'Dashibodi' });
+  if (!admin) return;
+
+  const r = await apiGet('dashboard.php');
+  if (!r.success) return;
+
+  const content = document.getElementById('pageContent');
+  const today = r.today;
+  const sv = r.stock_value;
+
+  let html = `
+    <div class="page-header"><h2><i class="bi bi-calendar-check"></i> Leo (${new Date().toLocaleDateString('sw-TZ')})</h2></div>
+    <div class="grid grid-4">
+      <div class="stat-card success"><div class="label">Mauzo ya Leo</div><div class="value">${money(today.sales)}</div></div>
+      <div class="stat-card info"><div class="label">Manukato Yaliyouzwa Leo</div><div class="value">${today.qty}</div></div>
+      <div class="stat-card danger"><div class="label">Matumizi ya Leo</div><div class="value">${money(today.expenses)}</div></div>
+      <div class="stat-card danger"><div class="label"><i class="bi bi-exclamation-diamond"></i> Hasara ya Leo</div><div class="value">${money(today.damage_loss)}</div></div>
+    </div>
+    <br>
+    <div class="grid grid-3">
+      <div class="stat-card"><div class="label">Faida Halisi ya Leo</div><div class="value">${money(today.net_profit)}</div></div>
+      <div class="stat-card success"><div class="label">Thamani ya Stock (Bei ya Kuuza)</div><div class="value">${money(sv.selling_value)}</div></div>
+      <div class="stat-card info"><div class="label">Faida Inayotarajiwa (Stock)</div><div class="value">${money(sv.expected_profit)}</div></div>
+    </div>
+    <p class="muted" style="font-size:12.5px;margin-top:8px">Tazama ukurasa wa <a href="reports.html" style="color:var(--gold-dark);font-weight:700">Ripoti</a> kwa uchambuzi wa wiki, mwezi, mwaka au kipindi maalum.</p>
+    <br>
+  `;
+
+  if (r.recent_activity) {
+    html += `
+      <div class="grid grid-2">
+        <div class="card">
+          <h3 style="margin-top:0;color:var(--gold-dark)"><i class="bi bi-clock-history"></i> Shughuli za Hivi Karibuni</h3>
+          <div style="max-height:340px;overflow-y:auto">
+            ${r.recent_activity.map(a => {
+              const meta = activityIcons[a.type] || { icon: 'bi-dot', color: 'var(--muted)', label: a.type };
+              return `
+                <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border)">
+                  <i class="bi ${meta.icon}" style="color:${meta.color};font-size:16px;margin-top:2px"></i>
+                  <div style="flex:1">
+                    <div style="font-size:12.5px;font-weight:700">${meta.label}: ${a.ref}</div>
+                    <div class="muted" style="font-size:11.5px">${a.detail || ''} &middot; ${fdate(a.created_at)}</div>
+                  </div>
+                  <div style="font-weight:700;font-size:12.5px;white-space:nowrap">${money(a.amount)}</div>
+                </div>
+              `;
+            }).join('') || '<p class="muted">Hakuna shughuli za hivi karibuni.</p>'}
+          </div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0;color:var(--gold-dark)"><i class="bi bi-x-octagon"></i> Bidhaa Zilizoisha Kabisa (Out of Stock)</h3>
+          <div class="table-wrap"><table>
+            <tr><th>Bidhaa</th><th>ML</th></tr>
+            ${(r.out_of_stock || []).map(p => `<tr><td>${p.name} <span class="muted">(${p.brand || ''})</span></td><td>${p.ml}ml</td></tr>`).join('') || '<tr><td colspan="2" class="muted">Hakuna bidhaa iliyoisha kabisa.</td></tr>'}
+          </table></div>
+        </div>
+      </div>
+      <br>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3 style="margin-top:0;color:var(--gold-dark)"><i class="bi bi-receipt"></i> Mauzo ya Hivi Karibuni</h3>
+          <div class="table-wrap"><table>
+            <tr><th>Namba</th><th>Mteja</th><th>Kiasi</th></tr>
+            ${(r.recent_sales || []).map(s => `<tr><td>${s.sale_code}</td><td>${s.customer_name || '-'}</td><td>${money(s.total_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">Hakuna mauzo bado.</td></tr>'}
+          </table></div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0;color:var(--gold-dark)"><i class="bi bi-exclamation-triangle"></i> Bidhaa Zinazokaribia Kuisha</h3>
+          <div class="toolbar" style="margin:0 0 10px">
+            <span class="muted" style="margin-right:4px;font-size:11.5px">Pakua Orodha Kamili:</span>
+            <a href="${API_BASE}/stock.php?action=low_stock&export=pdf" class="btn-secondary btn-sm"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+            <a href="${API_BASE}/stock.php?action=low_stock&export=excel" class="btn-secondary btn-sm"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+          </div>
+          <div class="table-wrap"><table>
+            <tr><th>Bidhaa</th><th>ML</th><th>Bei</th><th>Kiasi</th></tr>
+            ${r.low_stock.map(p => `<tr><td>${p.name}</td><td>${p.ml}ml</td><td>${money(p.price)}</td><td><strong style="color:var(--danger)">${p.stock_qty}</strong></td></tr>`).join('') || '<tr><td colspan="4" class="muted">Bidhaa zote ziko sawa.</td></tr>'}
+          </table></div>
+        </div>
+      </div>
+    `;
+  } else {
+    html += `
+      <div class="grid grid-3">
+        <a href="pos.html" class="card" style="text-decoration:none;text-align:center;padding:22px 14px">
+          <div style="font-size:26px;color:var(--gold)"><i class="bi bi-bag-check"></i></div>
+          <h4 style="margin:8px 0 2px">Rekodi Mauzo</h4>
+          <p class="muted" style="font-size:12px">Muuzie mteja aliyekuja dukani</p>
+        </a>
+        <a href="damages.html" class="card" style="text-decoration:none;text-align:center;padding:22px 14px">
+          <div style="font-size:26px;color:var(--gold)"><i class="bi bi-exclamation-diamond"></i></div>
+          <h4 style="margin:8px 0 2px">Uharibifu</h4>
+          <p class="muted" style="font-size:12px">Rekodi bidhaa iliyoharibika/kuisha muda</p>
+        </a>
+        <a href="stock.html" class="card" style="text-decoration:none;text-align:center;padding:22px 14px">
+          <div style="font-size:26px;color:var(--gold)"><i class="bi bi-box-seam"></i></div>
+          <h4 style="margin:8px 0 2px">Stock</h4>
+          <p class="muted" style="font-size:12px">Angalia bidhaa zilizopo kuuza</p>
+        </a>
+      </div>
+      <br>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3 style="margin-top:0;color:var(--gold-dark)"><i class="bi bi-exclamation-triangle"></i> Bidhaa Zinazokaribia Kuisha</h3>
+          <div class="toolbar" style="margin:0 0 10px">
+            <span class="muted" style="margin-right:4px;font-size:11.5px">Pakua Orodha Kamili:</span>
+            <a href="${API_BASE}/stock.php?action=low_stock&export=pdf" class="btn-secondary btn-sm"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+            <a href="${API_BASE}/stock.php?action=low_stock&export=excel" class="btn-secondary btn-sm"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+          </div>
+          <div class="table-wrap"><table>
+            <tr><th>Bidhaa</th><th>ML</th><th>Kiasi</th></tr>
+            ${r.low_stock.map(p => `<tr><td>${p.name}</td><td>${p.ml}ml</td><td><strong style="color:var(--danger)">${p.stock_qty}</strong></td></tr>`).join('') || '<tr><td colspan="3" class="muted">Bidhaa zote ziko sawa.</td></tr>'}
+          </table></div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0;color:var(--gold-dark)"><i class="bi bi-x-octagon"></i> Bidhaa Zilizoisha Kabisa</h3>
+          <div class="table-wrap"><table>
+            <tr><th>Bidhaa</th><th>ML</th></tr>
+            ${(r.out_of_stock || []).map(p => `<tr><td>${p.name}</td><td>${p.ml}ml</td></tr>`).join('') || '<tr><td colspan="2" class="muted">Hakuna bidhaa iliyoisha kabisa.</td></tr>'}
+          </table></div>
+        </div>
+      </div>
+    `;
+  }
+
+  content.innerHTML = html;
+}
+loadPage();
+</script>
+</body>
+</html>

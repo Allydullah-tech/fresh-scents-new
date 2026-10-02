@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uharibifu - FRESH SCENTS</title>
+<link rel="stylesheet" href="css/admin.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="icon" href="images/logo.jpeg">
+</head>
+<body>
+<div class="admin-wrap" id="adminWrap"></div>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script>
+const reasonLabels = { expired: 'Muda Umeisha', damaged: 'Imeharibika', other: 'Nyingine' };
+let variantAc = null;
+let editingDamageId = null;
+
+// Kichujio cha muda kwa historia ya uharibifu
+let dmgPendingPeriod = 'monthly';
+let dmgPendingYear = new Date().getFullYear();
+let dmgPendingFrom = new Date().toISOString().slice(0, 8) + '01';
+let dmgPendingTo = new Date().toISOString().slice(0, 10);
+let lastDmgReport = null;
+
+async function loadPage() {
+  const admin = await initAdminShell({ activePage: 'damages.html', pageTitle: 'Uharibifu / Muda Kuisha' });
+  if (!admin) return;
+  renderShell();
+  await loadVariants();
+  await applyDmgFilter();
+}
+
+function renderShell() {
+  document.getElementById('pageContent').innerHTML = `
+    <div id="alertBox"></div>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3 id="damageFormTitle" style="margin-top:0;color:var(--gold-dark)"><i class="bi bi-exclamation-diamond"></i> Rekodi Bidhaa Iliyoharibika/Kuisha Muda</h3>
+        <form id="damageForm">
+          <div id="sourceTypeRow">
+            <label>Chanzo cha Kilichoharibika</label>
+            <div class="form-row" style="grid-template-columns:1fr 1fr">
+              <label style="display:flex;align-items:center;gap:6px;font-weight:400;margin-top:0">
+                <input type="radio" name="sourceType" value="stock" checked onchange="toggleDamageSource()"> Bidhaa Iliyopo Stock
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;font-weight:400;margin-top:0">
+                <input type="radio" name="sourceType" value="other" onchange="toggleDamageSource()"> Nyingine / Haipo Stock
+              </label>
+            </div>
+          </div>
+
+          <div id="stockSourceWrap">
+            <div id="variantPickWrap">
+              <label>Tafuta / Chagua Bidhaa na Ukubwa (ML)</label>
+              <div id="variantAcWrap"></div>
+            </div>
+            <div id="variantFixedWrap" class="hidden">
+              <label>Bidhaa</label>
+              <input type="text" id="variantFixedName" disabled>
+            </div>
+          </div>
+
+          <div id="otherSourceWrap" class="hidden">
+            <label>Jina la Kitu Kilichoharibika</label>
+            <input type="text" id="otherItemName" placeholder="Mfano: Chupa, Kompyuta, Samani, Vifungashio...">
+            <label>Thamani/Kiasi Kilichopotea (TZS)</label>
+            <input type="number" step="0.01" id="otherAmount" placeholder="Mfano: 15000">
+            <p class="muted" style="font-size:11.5px;margin:4px 0 0">Tumia hii kwa vitu ambavyo si bidhaa za kuuza (kompyuta, samani, vifungashio, n.k.). Stock haitapunguzwa.</p>
+          </div>
+
+          <div class="form-row">
+            <div><label id="qtyLabel">Idadi Iliyoharibika</label><input type="number" id="quantity" min="1" value="1"></div>
+            <div><label>Sababu</label>
+              <select id="reason">
+                <option value="expired">Muda Umeisha (Expired)</option>
+                <option value="damaged">Imeharibika (Damaged)</option>
+                <option value="other">Nyingine</option>
+              </select>
+            </div>
+          </div>
+          <label>Tarehe</label>
+          <input type="date" id="damageDate">
+          <label>Maelezo (hiari)</label>
+          <textarea id="damageNotes" placeholder="Mfano: chupa ilivunjika ilipoanguka..."></textarea>
+          <div style="display:flex;gap:10px;margin-top:14px">
+            <button class="btn-primary" id="damageSubmitBtn" style="flex:1" type="submit">Rekodi Uharibifu</button>
+            <button class="btn-secondary hidden" id="damageCancelBtn" type="button" onclick="cancelEditDamage()">Ghairi</button>
+          </div>
+        </form>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;color:var(--gold-dark)"><i class="bi bi-graph-down-arrow"></i> Muhtasari</h3>
+        <div class="stat-card danger">
+          <div class="label" id="totalLossLabel">Jumla ya Hasara</div>
+          <div class="value" id="totalLossValue">0 TZS</div>
+        </div>
+        <p class="muted" style="margin-top:14px">Ukiweka bidhaa hapa kama imeharibika au muda umeisha, stock yake inapungua moja kwa moja. Vitu visivyo stock (mfano samani, vifaa) vinarekodiwa kama hasara bila kupunguza stock.</p>
+      </div>
+    </div>
+
+    <br>
+    <div id="dmgHistoryWrap"></div>
+  `;
+  document.getElementById('damageDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('damageForm').addEventListener('submit', submitDamage);
+  toggleDamageSource();
+}
+
+function toggleDamageSource() {
+  const type = document.querySelector('input[name="sourceType"]:checked').value;
+  document.getElementById('stockSourceWrap').classList.toggle('hidden', type !== 'stock');
+  document.getElementById('otherSourceWrap').classList.toggle('hidden', type !== 'other');
+  document.getElementById('qtyLabel').textContent = type === 'stock' ? 'Idadi Iliyoharibika' : 'Idadi (hiari)';
+}
+
+async function loadVariants() {
+  const r = await apiGet('damages.php', { action: 'variants' });
+  if (!r.success) return;
+  if (!variantAc) {
+    variantAc = createAutocomplete({
+      wrapEl: document.getElementById('variantAcWrap'),
+      items: r.variants,
+      placeholder: 'Andika jina la bidhaa (mfano: Aro)...',
+      noResultsText: 'Hakuna bidhaa inayolingana au haipo stock.',
+      getSearchText: v => `${v.name} ${v.brand || ''} ${v.ml}`,
+      getLabel: v => `${v.name} — ${v.ml}ml`,
+      getSub: v => `Stock: ${v.stock_qty}`,
+    });
+  } else {
+    variantAc.setItems(r.variants);
+  }
+}
+
+/* ================= Kichujio cha Muda kwa Historia ya Uharibifu ================= */
+
+function selectDmgPeriod(period) {
+  dmgPendingPeriod = period;
+  renderDmgHistory();
+}
+function setDmgYear(v) { dmgPendingYear = parseInt(v); }
+function setDmgFrom(v) { dmgPendingFrom = v; }
+function setDmgTo(v) { dmgPendingTo = v; }
+
+async function applyDmgFilter() {
+  if (dmgPendingPeriod === 'yearly') {
+    const el = document.getElementById('dmgYearSelect');
+    if (el) dmgPendingYear = parseInt(el.value);
+  }
+  if (dmgPendingPeriod === 'custom') {
+    const f = document.getElementById('dmgFromDate');
+    const t = document.getElementById('dmgToDate');
+    if (f) dmgPendingFrom = f.value;
+    if (t) dmgPendingTo = t.value;
+  }
+
+  const params = { period: dmgPendingPeriod };
+  if (dmgPendingPeriod === 'yearly') params.year = dmgPendingYear;
+  if (dmgPendingPeriod === 'custom') { params.from = dmgPendingFrom; params.to = dmgPendingTo; }
+
+  const r = await apiGet('damages.php', { action: 'history', ...params });
+  if (!r.success) return;
+  if (r.year) dmgPendingYear = r.year;
+  lastDmgReport = r;
+
+  document.getElementById('totalLossLabel').textContent = 'Jumla ya Hasara — ' + r.label;
+  document.getElementById('totalLossValue').textContent = money(r.total_loss);
+  renderDmgHistory();
+}
+
+function renderDmgHistory() {
+  const wrap = document.getElementById('dmgHistoryWrap');
+  if (!wrap) return;
+
+  const periodBtn = (p, label) => `<a href="#" onclick="selectDmgPeriod('${p}');return false;" class="btn-${dmgPendingPeriod === p ? 'primary' : 'secondary'} btn-sm">${label}</a>`;
+  const years = (lastDmgReport && lastDmgReport.available_years) || [dmgPendingYear];
+  const yearOptions = years.map(y => `<option value="${y}" ${y === dmgPendingYear ? 'selected' : ''}>${y}</option>`).join('');
+
+  let html = `
+    <div class="page-header"><h2>Historia ya Uharibifu${lastDmgReport ? ' — ' + lastDmgReport.label : ''}</h2></div>
+    <div class="toolbar">
+      ${periodBtn('daily', 'Siku')}
+      ${periodBtn('weekly', 'Wiki')}
+      ${periodBtn('monthly', 'Mwezi')}
+      ${periodBtn('yearly', 'Mwaka')}
+      ${periodBtn('custom', 'Kipindi Maalum')}
+    </div>
+    ${dmgPendingPeriod === 'yearly' ? `
+    <div class="toolbar">
+      <label style="margin:0">Chagua Mwaka</label>
+      <select id="dmgYearSelect" style="margin-top:0;width:auto">${yearOptions}</select>
+    </div>` : ''}
+    ${dmgPendingPeriod === 'custom' ? `
+    <div class="toolbar">
+      <label style="margin:0">Kuanzia</label><input type="date" id="dmgFromDate" value="${dmgPendingFrom}">
+      <label style="margin:0">Hadi</label><input type="date" id="dmgToDate" value="${dmgPendingTo}">
+    </div>` : ''}
+    <div class="toolbar">
+      <button class="btn-primary btn-sm" style="margin-top:0" onclick="applyDmgFilter()"><i class="bi bi-funnel-fill"></i> Chuja</button>
+    </div>
+  `;
+
+  if (lastDmgReport) {
+    html += `
+      <div class="table-wrap">
+        <table>
+          <tr><th>Kilichoharibika</th><th>Idadi</th><th>Sababu</th><th>Thamani ya Hasara</th><th>Tarehe</th><th>Aliyerekodi</th><th>Maelezo</th><th>Vitendo</th></tr>
+          ${lastDmgReport.history.map(h => `
+            <tr>
+              <td>${h.product_name}${h.is_stock_item == 1 ? ` (${h.ml}ml)` : ' <span class="badge badge-pending">Nje ya Stock</span>'}</td>
+              <td>${h.quantity}</td>
+              <td>${reasonLabels[h.reason] || h.reason}</td>
+              <td>${money(h.loss_value)}</td>
+              <td>${fdateOnly(h.damage_date)}</td>
+              <td>${h.recorded_by_name || '-'}</td>
+              <td>${h.notes || '-'}</td>
+              <td>
+                <button class="btn-outline btn-sm" onclick='openEditDamage(${JSON.stringify(h)})'>Hariri</button>
+                <button class="btn-danger btn-sm" onclick="deleteDamage(${h.id})">Futa</button>
+              </td>
+            </tr>
+          `).join('') || '<tr><td colspan="8" class="muted">Hakuna rekodi za uharibifu kwenye kipindi hiki.</td></tr>'}
+        </table>
+      </div>
+    `;
+  }
+
+  wrap.innerHTML = html;
+}
+
+function openEditDamage(h) {
+  editingDamageId = h.id;
+  document.getElementById('damageFormTitle').innerHTML = '<i class="bi bi-pencil-square"></i> Hariri Rekodi ya Uharibifu';
+  document.getElementById('sourceTypeRow').classList.add('hidden');
+
+  if (h.is_stock_item == 1) {
+    document.getElementById('stockSourceWrap').classList.remove('hidden');
+    document.getElementById('otherSourceWrap').classList.add('hidden');
+    document.getElementById('variantPickWrap').classList.add('hidden');
+    document.getElementById('variantFixedWrap').classList.remove('hidden');
+    document.getElementById('variantFixedName').value = `${h.product_name} — ${h.ml}ml`;
+    document.querySelector('input[name="sourceType"][value="stock"]').checked = true;
+  } else {
+    document.getElementById('stockSourceWrap').classList.add('hidden');
+    document.getElementById('otherSourceWrap').classList.remove('hidden');
+    document.getElementById('otherItemName').value = h.product_name;
+    document.getElementById('otherAmount').value = h.loss_value;
+    document.querySelector('input[name="sourceType"][value="other"]').checked = true;
+  }
+
+  document.getElementById('quantity').value = h.quantity;
+  document.getElementById('reason').value = h.reason;
+  document.getElementById('damageDate').value = h.damage_date;
+  document.getElementById('damageNotes').value = h.notes || '';
+  document.getElementById('qtyLabel').textContent = h.is_stock_item == 1 ? 'Idadi Iliyoharibika' : 'Idadi (hiari)';
+  document.getElementById('damageSubmitBtn').textContent = 'Sasisha Uharibifu';
+  document.getElementById('damageCancelBtn').classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function cancelEditDamage() {
+  editingDamageId = null;
+  document.getElementById('damageFormTitle').innerHTML = '<i class="bi bi-exclamation-diamond"></i> Rekodi Bidhaa Iliyoharibika/Kuisha Muda';
+  document.getElementById('sourceTypeRow').classList.remove('hidden');
+  document.getElementById('variantPickWrap').classList.remove('hidden');
+  document.getElementById('variantFixedWrap').classList.add('hidden');
+  document.getElementById('damageForm').reset();
+  document.getElementById('damageDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('quantity').value = 1;
+  document.getElementById('damageSubmitBtn').textContent = 'Rekodi Uharibifu';
+  document.getElementById('damageCancelBtn').classList.add('hidden');
+  if (variantAc) variantAc.clear();
+  toggleDamageSource();
+}
+
+async function deleteDamage(id) {
+  if (!confirm('Una uhakika unataka kufuta rekodi hii ya uharibifu? Stock itarudishwa ikiwa ilikuwa bidhaa ya stock.')) return;
+  const r = await apiGet('damages.php', { action: 'delete', id });
+  if (!r.success) { alert(r.message); return; }
+  await loadVariants();
+  await applyDmgFilter();
+}
+
+async function submitDamage(e) {
+  e.preventDefault();
+  const sourceType = document.querySelector('input[name="sourceType"]:checked').value;
+  const box = document.getElementById('alertBox');
+
+  const payload = {
+    quantity: parseInt(document.getElementById('quantity').value) || 1,
+    reason: document.getElementById('reason').value,
+    damage_date: document.getElementById('damageDate').value,
+    notes: document.getElementById('damageNotes').value.trim(),
+  };
+
+  if (editingDamageId) {
+    payload.id = editingDamageId;
+    if (sourceType === 'other') {
+      const itemName = document.getElementById('otherItemName').value.trim();
+      const amount = parseFloat(document.getElementById('otherAmount').value);
+      if (!itemName) { box.innerHTML = '<div class="alert alert-error">Tafadhali andika jina la kitu kilichoharibika.</div>'; return; }
+      if (!amount || amount <= 0) { box.innerHTML = '<div class="alert alert-error">Tafadhali weka thamani sahihi ya kilichopotea.</div>'; return; }
+      payload.item_name = itemName;
+      payload.amount = amount;
+    }
+    const r = await apiPost('damages.php', payload, 'update');
+    box.innerHTML = `<div class="alert ${r.success ? 'alert-success' : 'alert-error'}">${r.message}</div>`;
+    if (r.success) {
+      cancelEditDamage();
+      await loadVariants();
+      await applyDmgFilter();
+    }
+    return;
+  }
+
+  payload.source_type = sourceType;
+  if (sourceType === 'stock') {
+    const v = variantAc ? variantAc.getSelected() : null;
+    if (!v) { box.innerHTML = '<div class="alert alert-error">Tafadhali chagua bidhaa kwanza.</div>'; return; }
+    payload.variant_id = v.id;
+  } else {
+    const itemName = document.getElementById('otherItemName').value.trim();
+    const amount = parseFloat(document.getElementById('otherAmount').value);
+    if (!itemName) { box.innerHTML = '<div class="alert alert-error">Tafadhali andika jina la kitu kilichoharibika.</div>'; return; }
+    if (!amount || amount <= 0) { box.innerHTML = '<div class="alert alert-error">Tafadhali weka thamani sahihi ya kilichopotea.</div>'; return; }
+    payload.item_name = itemName;
+    payload.amount = amount;
+  }
+
+  const r = await apiPost('damages.php', payload, 'record');
+  box.innerHTML = `<div class="alert ${r.success ? 'alert-success' : 'alert-error'}">${r.message}</div>`;
+  if (r.success) {
+    document.getElementById('damageForm').reset();
+    document.getElementById('damageDate').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('quantity').value = 1;
+    if (variantAc) variantAc.clear();
+    toggleDamageSource();
+    await loadVariants();
+    await applyDmgFilter();
+  }
+}
+
+loadPage();
+</script>
+</body>
+</html>

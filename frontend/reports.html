@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ripoti - FRESH SCENTS</title>
+<link rel="stylesheet" href="css/admin.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="icon" href="images/logo.jpeg">
+</head>
+<body>
+<div class="admin-wrap" id="adminWrap"></div>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script>
+// Kipindi kilichotumika sasa (kinacholingana na ripoti inayoonyeshwa chini)
+let currentPeriod = 'daily';
+let selectedYear = new Date().getFullYear();
+let customFrom = new Date().toISOString().slice(0, 8) + '01';
+let customTo = new Date().toISOString().slice(0, 10);
+
+// Uchaguzi wa muda kwenye vitufe/toolbar (bado haujatumika mpaka "Chuja" ibonyezwe)
+let pendingPeriod = currentPeriod;
+let pendingYear = selectedYear;
+let pendingFrom = customFrom;
+let pendingTo = customTo;
+
+let lastReport = null;
+
+async function loadPage() {
+  const admin = await initAdminShell({ activePage: 'reports.html', pageTitle: 'Ripoti' });
+  if (!admin) return;
+  if (!requireRole(admin, ['super_admin', 'admin'])) return;
+
+  document.getElementById('pageContent').innerHTML = '<p class="muted">Inapakia...</p>';
+  await applyFilter(); // onyesha ripoti ya "Leo" kwanza mfumo unapofunguliwa
+}
+
+// Kubadilisha kitufe cha kipindi (Leo/Wiki/Mwezi/Mwaka/Kipindi Maalum) - HAKUNA data inayopakuliwa bado
+function selectPeriod(period) {
+  pendingPeriod = period;
+  render();
+}
+
+function setPendingYear(v) { pendingYear = parseInt(v); }
+function setPendingFrom(v) { pendingFrom = v; }
+function setPendingTo(v) { pendingTo = v; }
+
+// Tuma ombi kwa server na uonyeshe ripoti ya muda uliochaguliwa (kitufe "Chuja")
+async function applyFilter() {
+  currentPeriod = pendingPeriod;
+
+  if (currentPeriod === 'yearly') {
+    const yearEl = document.getElementById('yearSelect');
+    if (yearEl) pendingYear = parseInt(yearEl.value);
+    selectedYear = pendingYear;
+  }
+  if (currentPeriod === 'custom') {
+    const fromEl = document.getElementById('fromDate');
+    const toEl = document.getElementById('toDate');
+    if (fromEl) pendingFrom = fromEl.value;
+    if (toEl) pendingTo = toEl.value;
+    customFrom = pendingFrom;
+    customTo = pendingTo;
+  }
+
+  const params = { period: currentPeriod };
+  if (currentPeriod === 'custom') { params.from = customFrom; params.to = customTo; }
+  if (currentPeriod === 'yearly') { params.year = selectedYear; }
+
+  const filterBtn = document.getElementById('filterBtn');
+  if (filterBtn) { filterBtn.disabled = true; filterBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Inapakia...'; }
+
+  const r = await apiGet('reports.php', params);
+  if (!r.success) return;
+  if (r.year) selectedYear = r.year;
+  lastReport = r;
+  render();
+}
+
+function render() {
+  if (!lastReport) return;
+  const r = lastReport;
+
+  const periodBtn = (p, label) => `<a href="#" onclick="selectPeriod('${p}');return false;" class="btn-${pendingPeriod === p ? 'primary' : 'secondary'} btn-sm">${label}</a>`;
+  const yearOptions = (r.available_years || [pendingYear]).map(y => `<option value="${y}" ${y === pendingYear ? 'selected' : ''}>${y}</option>`).join('');
+
+  document.getElementById('pageContent').innerHTML = `
+    <div class="page-header"><h2><i class="bi bi-file-earmark-bar-graph"></i> Ripoti: ${r.label}</h2></div>
+
+    <div class="toolbar">
+      ${periodBtn('daily', 'Leo')}
+      ${periodBtn('weekly', 'Wiki Hii')}
+      ${periodBtn('monthly', 'Mwezi Huu')}
+      ${periodBtn('yearly', 'Mwaka')}
+      ${periodBtn('custom', 'Kipindi Maalum')}
+    </div>
+
+    ${pendingPeriod === 'yearly' ? `
+    <div class="toolbar">
+      <label style="margin:0">Chagua Mwaka</label>
+      <select id="yearSelect" onchange="setPendingYear(this.value)" style="margin-top:0;width:auto">${yearOptions}</select>
+    </div>` : ''}
+
+    ${pendingPeriod === 'custom' ? `
+    <div class="toolbar">
+      <label style="margin:0">Kuanzia</label><input type="date" id="fromDate" value="${pendingFrom}" onchange="setPendingFrom(this.value)">
+      <label style="margin:0">Hadi</label><input type="date" id="toDate" value="${pendingTo}" onchange="setPendingTo(this.value)">
+    </div>` : ''}
+
+    <div class="toolbar">
+      <button id="filterBtn" class="btn-primary btn-sm" style="margin-top:0" onclick="applyFilter()"><i class="bi bi-funnel-fill"></i> Chuja</button>
+      <span class="muted" style="margin-left:16px;margin-right:4px">Pakua Ripoti Hii:</span>
+      <a href="#" onclick="exportReport('pdf');return false;" class="btn-secondary btn-sm"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+      <a href="#" onclick="exportReport('excel');return false;" class="btn-secondary btn-sm"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+    </div>
+
+    <div class="grid grid-4">
+      <div class="stat-card success"><div class="label">Jumla ya Mauzo</div><div class="value">${money(r.total_sales)}</div></div>
+      <div class="stat-card info"><div class="label">Manukato Yaliyouzwa</div><div class="value">${r.total_qty}</div></div>
+      <div class="stat-card danger"><div class="label">Jumla ya Matumizi</div><div class="value">${money(r.total_expenses)}</div></div>
+      <div class="stat-card"><div class="label">Faida Halisi</div><div class="value">${money(r.net_profit)}</div></div>
+    </div>
+
+    <br>
+    <div class="grid grid-3">
+      <div class="stat-card"><div class="label">Idadi ya Miamala</div><div class="value">${r.total_transactions}</div></div>
+      <div class="stat-card"><div class="label">Wastani kwa Muamala</div><div class="value">${money(r.total_transactions ? r.total_sales / r.total_transactions : 0)}</div></div>
+      <div class="stat-card danger"><div class="label"><i class="bi bi-exclamation-diamond"></i> Hasara ya Uharibifu (${r.total_damage_qty} vipande)</div><div class="value">${money(r.total_damage_value)}</div></div>
+    </div>
+
+    <br>
+    <div class="page-header"><h2 style="font-size:16px">Thamani ya Stock (Mwisho wa Kipindi Kilichochaguliwa)</h2></div>
+    <div class="grid grid-4">
+      <div class="stat-card"><div class="label">Bidhaa Zenye Stock</div><div class="value">${r.stock_total_products}</div></div>
+      <div class="stat-card"><div class="label">Thamani ya Stock (Ununuzi)</div><div class="value">${money(r.stock_buying_value)}</div></div>
+      <div class="stat-card success"><div class="label">Thamani ya Stock (Kuuza)</div><div class="value">${money(r.stock_selling_value)}</div></div>
+      <div class="stat-card info"><div class="label">Faida Inayotarajiwa (Stock)</div><div class="value">${money(r.stock_expected_profit)}</div></div>
+    </div>
+    <p class="muted" style="font-size:11px">Mishahara Iliyolipwa kwenye kipindi hiki: <strong>${money(r.total_salaries_paid)}</strong>. Bei zinazotumika kwa stock ni bei za sasa za bidhaa.</p>
+
+    <br>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3 style="margin-top:0;color:var(--gold-dark)">Bidhaa Zinazouzwa Zaidi</h3>
+        <div class="table-wrap"><table>
+          <tr><th>Bidhaa</th><th>Idadi</th><th>Jumla</th></tr>
+          ${r.top_products.map(t => `<tr><td>${t.product_name} (${t.ml}ml)</td><td>${t.qty}</td><td>${money(t.total)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">Hakuna data.</td></tr>'}
+        </table></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;color:var(--gold-dark)">Jinsi Faida Inavyokokotolewa</h3>
+        <p class="muted">Faida Halisi = Jumla ya Mauzo &minus; Jumla ya Matumizi &minus; Hasara ya Uharibifu, kwa kipindi ulichochagua hapo juu.</p>
+      </div>
+    </div>
+
+    <br>
+    <div class="page-header"><h2>Orodha ya Mauzo Kwenye Kipindi Hiki</h2></div>
+    <div class="table-wrap"><table>
+      <tr><th>Namba</th><th>Mteja</th><th>Kiasi</th><th>Aliyeuza</th><th>Tarehe</th></tr>
+      ${r.sales_list.map(s => `<tr><td>${s.sale_code}</td><td>${s.customer_name || '-'}</td><td>${money(s.total_amount)}</td><td>${s.admin_name || '-'}</td><td>${fdate(s.created_at)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Hakuna mauzo katika kipindi hiki.</td></tr>'}
+    </table></div>
+  `;
+}
+
+function exportReport(format) {
+  const params = new URLSearchParams({ period: currentPeriod, export: format });
+  if (currentPeriod === 'custom') { params.set('from', customFrom); params.set('to', customTo); }
+  if (currentPeriod === 'yearly') { params.set('year', selectedYear); }
+  window.location.href = `${API_BASE}/reports.php?${params.toString()}`;
+}
+
+loadPage();
+</script>
+</body>
+</html>

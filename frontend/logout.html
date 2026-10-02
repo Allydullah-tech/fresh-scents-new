@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+<meta charset="UTF-8">
+<title>Kutoka... - FRESH SCENTS</title>
+</head>
+<body>
+<script src="js/api.js"></script>
+<script>
+apiPost('auth.php', {}, 'logout').then(() => {
+  window.location.href = 'login.html';
+});
+</script>
+</body>
+</html>

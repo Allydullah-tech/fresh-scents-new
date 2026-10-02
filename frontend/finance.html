@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matumizi - FRESH SCENTS</title>
+<link rel="stylesheet" href="css/admin.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="icon" href="images/logo.jpeg">
+</head>
+<body>
+<div class="admin-wrap" id="adminWrap"></div>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script>
+let currentAdmin = null;
+let editingExpenseId = null;
+
+// Kichujio cha muda kwa Mapato/Matumizi
+let finPendingPeriod = 'monthly';
+let finPendingYear = new Date().getFullYear();
+let finPendingFrom = new Date().toISOString().slice(0, 8) + '01';
+let finPendingTo = new Date().toISOString().slice(0, 10);
+let lastFinReport = null;
+
+async function loadPage() {
+  currentAdmin = await initAdminShell({ activePage: 'finance.html', pageTitle: 'Matumizi' });
+  if (!currentAdmin) return;
+
+  if (isAdminOrAbove(currentAdmin)) {
+    renderAdminShell();
+    await applyFinFilter();
+  } else {
+    renderWorkerView();
+  }
+}
+
+function renderWorkerView() {
+  document.getElementById('pageContent').innerHTML = `
+    <div id="alertBox"></div>
+    <div class="card" style="max-width:520px">
+      <h3 style="margin-top:0;color:var(--gold-dark)"><i class="bi bi-plus-circle"></i> Ongeza Tumizi</h3>
+      <p class="muted">Andika matumizi yaliyofanyika. Msimamizi ndiye anayeona ripoti kamili ya fedha.</p>
+      <form id="expenseForm">
+        <label>Jina la Tumizi</label>
+        <input type="text" id="title" required placeholder="Mfano: Usafiri, Vifaa vidogo...">
+        <div class="form-row">
+          <div><label>Aina</label><input type="text" id="category" placeholder="Mfano: Uendeshaji"></div>
+          <div><label>Kiasi (TZS)</label><input type="number" step="0.01" id="amount" required></div>
+        </div>
+        <label>Tarehe</label>
+        <input type="date" id="expenseDate">
+        <label>Maelezo</label>
+        <textarea id="notes"></textarea>
+        <button class="btn-primary" style="width:100%;margin-top:14px" type="submit">Hifadhi Tumizi</button>
+      </form>
+    </div>
+  `;
+  document.getElementById('expenseDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('expenseForm').addEventListener('submit', submitExpense);
+}
+
+function renderAdminShell() {
+  document.getElementById('pageContent').innerHTML = `
+    <div id="alertBox"></div>
+    <div id="finReportWrap"></div>
+
+    <br>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3 id="expenseFormTitle" style="margin-top:0;color:var(--gold-dark)"><i class="bi bi-plus-circle"></i> Ongeza Tumizi</h3>
+        <form id="expenseForm">
+          <label>Jina la Tumizi</label>
+          <input type="text" id="title" required placeholder="Mfano: Umeme, Kodi ya Duka, Usafiri...">
+          <div class="form-row">
+            <div><label>Aina</label><input type="text" id="category" placeholder="Mfano: Uendeshaji"></div>
+            <div><label>Kiasi (TZS)</label><input type="number" step="0.01" id="amount" required></div>
+          </div>
+          <label>Tarehe</label>
+          <input type="date" id="expenseDate">
+          <label>Maelezo</label>
+          <textarea id="notes"></textarea>
+          <div style="display:flex;gap:10px;margin-top:14px">
+            <button class="btn-primary" id="expenseSubmitBtn" style="flex:1" type="submit">Hifadhi Tumizi</button>
+            <button class="btn-secondary hidden" id="expenseCancelBtn" type="button" onclick="cancelEditExpense()">Ghairi</button>
+          </div>
+        </form>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;color:var(--gold-dark)">Maelezo</h3>
+        <p class="muted">Mapato yanakokotolewa moja kwa moja kutoka mauzo. Wafanyakazi wanaweza kuongeza matumizi lakini hawaoni ripoti hii kamili.</p>
+      </div>
+    </div>
+
+    <br>
+    <div class="page-header"><h2>Orodha ya Matumizi</h2></div>
+    <div class="table-wrap"><table>
+      <tr><th>Jina</th><th>Aina</th><th>Kiasi</th><th>Tarehe</th><th>Aliyeongeza</th><th>Maelezo</th><th>Vitendo</th></tr>
+      <tbody id="expensesTbody"></tbody>
+    </table></div>
+  `;
+  document.getElementById('expenseDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('expenseForm').addEventListener('submit', submitExpense);
+}
+
+function selectFinPeriod(period) {
+  finPendingPeriod = period;
+  renderFinReport();
+}
+function setFinYear(v) { finPendingYear = parseInt(v); }
+function setFinFrom(v) { finPendingFrom = v; }
+function setFinTo(v) { finPendingTo = v; }
+
+async function applyFinFilter() {
+  if (finPendingPeriod === 'yearly') {
+    const el = document.getElementById('finYearSelect');
+    if (el) finPendingYear = parseInt(el.value);
+  }
+  if (finPendingPeriod === 'custom') {
+    const f = document.getElementById('finFromDate');
+    const t = document.getElementById('finToDate');
+    if (f) finPendingFrom = f.value;
+    if (t) finPendingTo = t.value;
+  }
+
+  const params = { action: 'report', period: finPendingPeriod };
+  if (finPendingPeriod === 'yearly') params.year = finPendingYear;
+  if (finPendingPeriod === 'custom') { params.from = finPendingFrom; params.to = finPendingTo; }
+
+  const r = await apiGet('finance.php', params);
+  if (!r.success) return;
+  if (r.year) finPendingYear = r.year;
+  lastFinReport = r;
+
+  renderFinReport();
+  document.getElementById('expensesTbody').innerHTML = r.expenses.map(e => `
+    <tr>
+      <td>${e.title}</td><td>${e.category || '-'}</td><td>${money(e.amount)}</td>
+      <td>${fdateOnly(e.expense_date)}</td><td>${e.added_by_name || '-'}</td><td>${e.notes || '-'}</td>
+      <td>
+        <button class="btn-outline btn-sm" onclick='openEditExpense(${JSON.stringify(e)})'>Hariri</button>
+        <button class="btn-danger btn-sm" onclick="deleteExpense(${e.id})">Futa</button>
+      </td>
+    </tr>
+  `).join('') || '<tr><td colspan="7" class="muted">Hakuna matumizi katika kipindi hiki.</td></tr>';
+}
+
+function openEditExpense(e) {
+  editingExpenseId = e.id;
+  document.getElementById('expenseFormTitle').innerHTML = '<i class="bi bi-pencil-square"></i> Hariri Tumizi';
+  document.getElementById('title').value = e.title;
+  document.getElementById('category').value = e.category || '';
+  document.getElementById('amount').value = e.amount;
+  document.getElementById('expenseDate').value = e.expense_date;
+  document.getElementById('notes').value = e.notes || '';
+  document.getElementById('expenseSubmitBtn').textContent = 'Sasisha Tumizi';
+  document.getElementById('expenseCancelBtn').classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function cancelEditExpense() {
+  editingExpenseId = null;
+  document.getElementById('expenseFormTitle').innerHTML = '<i class="bi bi-plus-circle"></i> Ongeza Tumizi';
+  document.getElementById('expenseForm').reset();
+  document.getElementById('expenseDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('expenseSubmitBtn').textContent = 'Hifadhi Tumizi';
+  document.getElementById('expenseCancelBtn').classList.add('hidden');
+}
+
+function renderFinReport() {
+  const wrap = document.getElementById('finReportWrap');
+  if (!wrap || !lastFinReport) return;
+  const r = lastFinReport;
+
+  const periodBtn = (p, label) => `<a href="#" onclick="selectFinPeriod('${p}');return false;" class="btn-${finPendingPeriod === p ? 'primary' : 'secondary'} btn-sm">${label}</a>`;
+  const years = r.available_years || [finPendingYear];
+  const yearOptions = years.map(y => `<option value="${y}" ${y === finPendingYear ? 'selected' : ''}>${y}</option>`).join('');
+
+  wrap.innerHTML = `
+    <div class="page-header"><h2>Mapato na Matumizi — ${r.label}</h2></div>
+    <div class="toolbar">
+      ${periodBtn('daily', 'Siku')}
+      ${periodBtn('weekly', 'Wiki')}
+      ${periodBtn('monthly', 'Mwezi')}
+      ${periodBtn('yearly', 'Mwaka')}
+      ${periodBtn('custom', 'Kipindi Maalum')}
+    </div>
+    ${finPendingPeriod === 'yearly' ? `
+    <div class="toolbar">
+      <label style="margin:0">Chagua Mwaka</label>
+      <select id="finYearSelect" style="margin-top:0;width:auto">${yearOptions}</select>
+    </div>` : ''}
+    ${finPendingPeriod === 'custom' ? `
+    <div class="toolbar">
+      <label style="margin:0">Kuanzia</label><input type="date" id="finFromDate" value="${finPendingFrom}">
+      <label style="margin:0">Hadi</label><input type="date" id="finToDate" value="${finPendingTo}">
+    </div>` : ''}
+    <div class="toolbar">
+      <button class="btn-primary btn-sm" style="margin-top:0" onclick="applyFinFilter()"><i class="bi bi-funnel-fill"></i> Chuja</button>
+    </div>
+
+    <div class="grid grid-3">
+      <div class="stat-card success"><div class="label">Mapato (Mauzo)</div><div class="value">${money(r.income)}</div></div>
+      <div class="stat-card danger"><div class="label">Matumizi</div><div class="value">${money(r.total_expenses)}</div></div>
+      <div class="stat-card info"><div class="label">Faida Halisi</div><div class="value">${money(r.profit)}</div></div>
+    </div>
+  `;
+}
+
+async function submitExpense(e) {
+  e.preventDefault();
+  const box = document.getElementById('alertBox');
+
+  if (editingExpenseId) {
+    const payload = {
+      id: editingExpenseId,
+      title: document.getElementById('title').value.trim(),
+      category: document.getElementById('category').value.trim(),
+      amount: parseFloat(document.getElementById('amount').value),
+      expense_date: document.getElementById('expenseDate').value,
+      notes: document.getElementById('notes').value.trim(),
+    };
+    const r = await apiPost('finance.php', payload, 'update_expense');
+    box.innerHTML = `<div class="alert ${r.success ? 'alert-success' : 'alert-error'}">${r.message}</div>`;
+    if (r.success) {
+      cancelEditExpense();
+      await applyFinFilter();
+    }
+    return;
+  }
+
+  const payload = {
+    title: document.getElementById('title').value.trim(),
+    category: document.getElementById('category').value.trim(),
+    amount: parseFloat(document.getElementById('amount').value),
+    expense_date: document.getElementById('expenseDate').value,
+    notes: document.getElementById('notes').value.trim(),
+  };
+  const r = await apiPost('finance.php', payload, 'add_expense');
+  box.innerHTML = `<div class="alert ${r.success ? 'alert-success' : 'alert-error'}">${r.message}</div>`;
+  if (r.success) {
+    document.getElementById('expenseForm').reset();
+    document.getElementById('expenseDate').value = new Date().toISOString().slice(0, 10);
+    if (isAdminOrAbove(currentAdmin)) await applyFinFilter();
+  }
+}
+
+async function deleteExpense(id) {
+  if (!confirm('Futa tumizi hili?')) return;
+  const r = await apiGet('finance.php', { action: 'delete_expense', id });
+  if (!r.success) { alert(r.message); return; }
+  await applyFinFilter();
+}
+
+loadPage();
+</script>
+</body>
+</html>

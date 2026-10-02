@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Malipo ya Wafanyakazi - FRESH SCENTS</title>
+<link rel="stylesheet" href="css/admin.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="icon" href="images/logo.jpeg">
+</head>
+<body>
+<div class="admin-wrap" id="adminWrap"></div>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script>
+let empAc = null;
+let editingPaymentId = null;
+
+// Kichujio cha muda kwa malipo ya mishahara
+let payPendingPeriod = 'monthly';
+let payPendingYear = new Date().getFullYear();
+let payPendingFrom = new Date().toISOString().slice(0, 8) + '01';
+let payPendingTo = new Date().toISOString().slice(0, 10);
+let lastPayReport = null;
+
+async function loadPage() {
+  const admin = await initAdminShell({ activePage: 'payroll.html', pageTitle: 'Malipo ya Wafanyakazi' });
+  if (!admin) return;
+  if (!requireRole(admin, ['super_admin', 'admin'])) return;
+  await applyPayrollFilter();
+}
+
+function renderShell(employees, totalMonthlySalary) {
+  document.getElementById('pageContent').innerHTML = `
+    <div id="alertBox"></div>
+    <div class="grid grid-2">
+      <div class="stat-card"><div class="label">Wafanyakazi Wanaofanya Kazi</div><div class="value">${employees.length}</div></div>
+      <div class="stat-card info"><div class="label">Jumla ya Mishahara kwa Mwezi (Obligation)</div><div class="value">${money(totalMonthlySalary)}</div></div>
+    </div>
+
+    <br>
+    <div class="card">
+      <h3 id="payFormTitle" style="margin-top:0;color:var(--gold-dark)"><i class="bi bi-receipt"></i> Rekodi Malipo ya Mshahara</h3>
+      <form id="payForm">
+        <div class="form-row">
+          <div id="empPickWrap"><label>Chagua Mfanyakazi</label>
+            <div id="empAcWrap"></div>
+          </div>
+          <div id="empFixedWrap" class="hidden"><label>Mfanyakazi</label>
+            <input type="text" id="empFixedName" disabled>
+          </div>
+          <div><label>Kiasi Kinacholipwa (TZS)</label><input type="number" step="0.01" id="amount" required></div>
+        </div>
+        <div class="form-row">
+          <div><label>Mwezi Unaolipiwa</label><input type="text" id="payMonth" placeholder="Mfano: Agosti 2026" required></div>
+          <div><label>Tarehe ya Malipo</label><input type="date" id="payDate"></div>
+        </div>
+        <label>Maelezo</label>
+        <textarea id="notes"></textarea>
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <button class="btn-primary" id="payFormSubmitBtn" style="flex:1" type="submit">Rekodi Malipo</button>
+          <button class="btn-secondary hidden" id="payFormCancelBtn" type="button" onclick="cancelEditPayment()">Ghairi</button>
+        </div>
+      </form>
+    </div>
+
+    <br>
+    <div id="payrollHistoryWrap"></div>
+  `;
+
+  document.getElementById('payDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('payForm').addEventListener('submit', submitPayment);
+
+  empAc = createAutocomplete({
+    wrapEl: document.getElementById('empAcWrap'),
+    items: employees,
+    placeholder: 'Andika jina la mfanyakazi (mfano: Ester, Jona)...',
+    noResultsText: 'Hakuna mfanyakazi anayelingana.',
+    getSearchText: e => `${e.full_name} ${e.position}`,
+    getLabel: e => `${e.full_name} — ${e.position}`,
+    getSub: e => `Mshahara: ${money(e.salary)}`,
+    onSelect: e => { document.getElementById('amount').value = e.salary || ''; },
+  });
+}
+
+function selectPayPeriod(period) {
+  payPendingPeriod = period;
+  renderPayrollHistory();
+}
+function setPayYear(v) { payPendingYear = parseInt(v); }
+function setPayFrom(v) { payPendingFrom = v; }
+function setPayTo(v) { payPendingTo = v; }
+
+async function applyPayrollFilter() {
+  if (payPendingPeriod === 'yearly') {
+    const el = document.getElementById('payYearSelect');
+    if (el) payPendingYear = parseInt(el.value);
+  }
+  if (payPendingPeriod === 'custom') {
+    const f = document.getElementById('payFromDate');
+    const t = document.getElementById('payToDate');
+    if (f) payPendingFrom = f.value;
+    if (t) payPendingTo = t.value;
+  }
+
+  const params = { action: 'data', period: payPendingPeriod };
+  if (payPendingPeriod === 'yearly') params.year = payPendingYear;
+  if (payPendingPeriod === 'custom') { params.from = payPendingFrom; params.to = payPendingTo; }
+
+  const r = await apiGet('payroll.php', params);
+  if (!r.success) return;
+  if (r.year) payPendingYear = r.year;
+  lastPayReport = r;
+
+  // Fomu na vitufe vya juu vinatengenezwa mara moja tu (au vinapohitajika),
+  // ili kuchagua mfanyakazi kwenye orodha ya utafutaji kusibadilike wakati wa "Chuja".
+  if (!document.getElementById('payrollHistoryWrap')) {
+    renderShell(r.employees, r.total_monthly_salary);
+  }
+  renderPayrollHistory();
+}
+
+function renderPayrollHistory() {
+  const wrap = document.getElementById('payrollHistoryWrap');
+  if (!wrap || !lastPayReport) return;
+  const r = lastPayReport;
+
+  const periodBtn = (p, label) => `<a href="#" onclick="selectPayPeriod('${p}');return false;" class="btn-${payPendingPeriod === p ? 'primary' : 'secondary'} btn-sm">${label}</a>`;
+  const years = r.available_years || [payPendingYear];
+  const yearOptions = years.map(y => `<option value="${y}" ${y === payPendingYear ? 'selected' : ''}>${y}</option>`).join('');
+
+  wrap.innerHTML = `
+    <div class="page-header"><h2>Historia ya Malipo — ${r.label}</h2></div>
+    <div class="toolbar">
+      ${periodBtn('daily', 'Siku')}
+      ${periodBtn('weekly', 'Wiki')}
+      ${periodBtn('monthly', 'Mwezi')}
+      ${periodBtn('yearly', 'Mwaka')}
+      ${periodBtn('custom', 'Kipindi Maalum')}
+    </div>
+    ${payPendingPeriod === 'yearly' ? `
+    <div class="toolbar">
+      <label style="margin:0">Chagua Mwaka</label>
+      <select id="payYearSelect" style="margin-top:0;width:auto">${yearOptions}</select>
+    </div>` : ''}
+    ${payPendingPeriod === 'custom' ? `
+    <div class="toolbar">
+      <label style="margin:0">Kuanzia</label><input type="date" id="payFromDate" value="${payPendingFrom}">
+      <label style="margin:0">Hadi</label><input type="date" id="payToDate" value="${payPendingTo}">
+    </div>` : ''}
+    <div class="toolbar">
+      <button class="btn-primary btn-sm" style="margin-top:0" onclick="applyPayrollFilter()"><i class="bi bi-funnel-fill"></i> Chuja</button>
+    </div>
+
+    <div class="stat-card success" style="max-width:340px">
+      <div class="label">Jumla ya Mishahara Iliyolipwa — ${r.label}</div>
+      <div class="value">${money(r.total_paid)}</div>
+    </div>
+
+    <br>
+    <div class="table-wrap"><table>
+      <tr><th>Mfanyakazi</th><th>Nafasi</th><th>Kiasi</th><th>Mwezi</th><th>Tarehe</th><th>Maelezo</th><th>Vitendo</th></tr>
+      ${r.history.map(h => `
+        <tr>
+          <td>${h.full_name}</td><td>${h.position}</td><td>${money(h.amount)}</td><td>${h.pay_month}</td>
+          <td>${fdateOnly(h.pay_date)}</td><td>${h.notes || '-'}</td>
+          <td>
+            <button class="btn-outline btn-sm" onclick='openEditPayment(${JSON.stringify(h)})'>Hariri</button>
+            <button class="btn-danger btn-sm" onclick="deletePayment(${h.id})">Futa</button>
+          </td>
+        </tr>
+      `).join('') || '<tr><td colspan="7" class="muted">Hakuna malipo yaliyorekodiwa kwenye kipindi hiki.</td></tr>'}
+    </table></div>
+  `;
+}
+
+function openEditPayment(h) {
+  editingPaymentId = h.id;
+  document.getElementById('payFormTitle').innerHTML = '<i class="bi bi-pencil-square"></i> Hariri Malipo ya Mshahara';
+  document.getElementById('empPickWrap').classList.add('hidden');
+  document.getElementById('empFixedWrap').classList.remove('hidden');
+  document.getElementById('empFixedName').value = `${h.full_name} — ${h.position}`;
+  document.getElementById('amount').value = h.amount;
+  document.getElementById('payMonth').value = h.pay_month;
+  document.getElementById('payDate').value = h.pay_date;
+  document.getElementById('notes').value = h.notes || '';
+  document.getElementById('payFormSubmitBtn').textContent = 'Sasisha Malipo';
+  document.getElementById('payFormCancelBtn').classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function cancelEditPayment() {
+  editingPaymentId = null;
+  document.getElementById('payFormTitle').innerHTML = '<i class="bi bi-receipt"></i> Rekodi Malipo ya Mshahara';
+  document.getElementById('empPickWrap').classList.remove('hidden');
+  document.getElementById('empFixedWrap').classList.add('hidden');
+  document.getElementById('payForm').reset();
+  document.getElementById('payDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('payFormSubmitBtn').textContent = 'Rekodi Malipo';
+  document.getElementById('payFormCancelBtn').classList.add('hidden');
+  if (empAc) empAc.clear();
+}
+
+async function submitPayment(e) {
+  e.preventDefault();
+  const box = document.getElementById('alertBox');
+
+  if (editingPaymentId) {
+    const payload = {
+      id: editingPaymentId,
+      amount: parseFloat(document.getElementById('amount').value),
+      pay_month: document.getElementById('payMonth').value.trim(),
+      pay_date: document.getElementById('payDate').value,
+      notes: document.getElementById('notes').value.trim(),
+    };
+    const r = await apiPost('payroll.php', payload, 'update');
+    if (!r.success) { alert(r.message); return; }
+    cancelEditPayment();
+    await applyPayrollFilter();
+    return;
+  }
+
+  const emp = empAc ? empAc.getSelected() : null;
+  if (!emp) { alert('Tafadhali chagua mfanyakazi kwanza.'); return; }
+  const payload = {
+    employee_id: emp.id,
+    amount: parseFloat(document.getElementById('amount').value),
+    pay_month: document.getElementById('payMonth').value.trim(),
+    pay_date: document.getElementById('payDate').value,
+    notes: document.getElementById('notes').value.trim(),
+  };
+  const r = await apiPost('payroll.php', payload, 'record');
+  if (!r.success) { alert(r.message); return; }
+  document.getElementById('payForm').reset();
+  document.getElementById('payDate').value = new Date().toISOString().slice(0, 10);
+  if (empAc) empAc.clear();
+  await applyPayrollFilter();
+}
+
+async function deletePayment(id) {
+  if (!confirm('Una uhakika unataka kufuta malipo haya?')) return;
+  const r = await apiGet('payroll.php', { action: 'delete', id });
+  if (!r.success) { alert(r.message); return; }
+  await applyPayrollFilter();
+}
+
+loadPage();
+</script>
+</body>
+</html>

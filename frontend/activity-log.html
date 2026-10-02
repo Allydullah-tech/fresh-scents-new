@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shughuli za Mfumo - FRESH SCENTS</title>
+<link rel="stylesheet" href="css/admin.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="icon" href="images/logo.jpeg">
+</head>
+<body>
+<div class="admin-wrap" id="adminWrap"></div>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script>
+const moduleLabels = {
+  sales: 'Mauzo', stock: 'Stock', damages: 'Uharibifu', payroll: 'Malipo ya Wafanyakazi',
+  expenses: 'Matumizi', auth: 'Kuingia/Kutoka Mfumoni', products: 'Bidhaa', admins: 'Watumiaji wa Mfumo',
+};
+const actionMeta = {
+  create: { label: 'Ameongeza', icon: 'bi-plus-circle', color: 'var(--success, #166534)' },
+  update: { label: 'Amesasisha', icon: 'bi-pencil-square', color: '#1d4ed8' },
+  delete: { label: 'Amefuta', icon: 'bi-trash', color: 'var(--danger)' },
+  login: { label: 'Ameingia', icon: 'bi-box-arrow-in-right', color: '#166534' },
+  logout: { label: 'Ametoka', icon: 'bi-box-arrow-right', color: 'var(--muted)' },
+};
+
+let pendingPeriod = 'monthly';
+let pendingYear = new Date().getFullYear();
+let pendingFrom = new Date().toISOString().slice(0, 8) + '01';
+let pendingTo = new Date().toISOString().slice(0, 10);
+let pendingModule = '';
+let pendingSearch = '';
+let lastLog = null;
+
+async function loadPage() {
+  const admin = await initAdminShell({ activePage: 'activity-log.html', pageTitle: 'Shughuli za Mfumo' });
+  if (!admin) return;
+  if (!requireRole(admin, ['super_admin'])) return;
+  document.getElementById('pageContent').innerHTML = '<p class="muted">Inapakia...</p>';
+  await applyFilter();
+}
+
+function selectPeriod(period) {
+  pendingPeriod = period;
+  render();
+}
+function setYear(v) { pendingYear = parseInt(v); }
+function setFrom(v) { pendingFrom = v; }
+function setTo(v) { pendingTo = v; }
+function setModule(v) { pendingModule = v; }
+
+async function applyFilter() {
+  if (pendingPeriod === 'yearly') {
+    const el = document.getElementById('logYearSelect');
+    if (el) pendingYear = parseInt(el.value);
+  }
+  if (pendingPeriod === 'custom') {
+    const f = document.getElementById('logFromDate');
+    const t = document.getElementById('logToDate');
+    if (f) pendingFrom = f.value;
+    if (t) pendingTo = t.value;
+  }
+  const moduleEl = document.getElementById('logModuleSelect');
+  if (moduleEl) pendingModule = moduleEl.value;
+  const searchEl = document.getElementById('logSearchInput');
+  if (searchEl) pendingSearch = searchEl.value.trim();
+
+  const params = { action: 'list', period: pendingPeriod };
+  if (pendingPeriod === 'yearly') params.year = pendingYear;
+  if (pendingPeriod === 'custom') { params.from = pendingFrom; params.to = pendingTo; }
+  if (pendingModule) params.module = pendingModule;
+  if (pendingSearch) params.search = pendingSearch;
+
+  const r = await apiGet('activity_log.php', params);
+  if (!r.success) return;
+  if (r.year) pendingYear = r.year;
+  lastLog = r;
+  render();
+}
+
+function render() {
+  const content = document.getElementById('pageContent');
+  const periodBtn = (p, label) => `<a href="#" onclick="selectPeriod('${p}');return false;" class="btn-${pendingPeriod === p ? 'primary' : 'secondary'} btn-sm">${label}</a>`;
+  const years = (lastLog && lastLog.available_years) || [pendingYear];
+  const yearOptions = years.map(y => `<option value="${y}" ${y === pendingYear ? 'selected' : ''}>${y}</option>`).join('');
+  const moduleOptions = (lastLog && lastLog.modules || []).map(m => `<option value="${m}" ${m === pendingModule ? 'selected' : ''}>${moduleLabels[m] || m}</option>`).join('');
+
+  let html = `
+    <div class="page-header"><h2><i class="bi bi-clock-history"></i> Shughuli za Mfumo${lastLog ? ' — ' + lastLog.label : ''}</h2></div>
+    <p class="muted" style="margin-top:-6px">Rejesta ya vitendo vyote vilivyofanyika kwenye mfumo (nani alifanya nini na lini).</p>
+
+    <div class="toolbar">
+      ${periodBtn('daily', 'Siku')}
+      ${periodBtn('weekly', 'Wiki')}
+      ${periodBtn('monthly', 'Mwezi')}
+      ${periodBtn('yearly', 'Mwaka')}
+      ${periodBtn('custom', 'Kipindi Maalum')}
+    </div>
+    ${pendingPeriod === 'yearly' ? `
+    <div class="toolbar">
+      <label style="margin:0">Chagua Mwaka</label>
+      <select id="logYearSelect" style="margin-top:0;width:auto">${yearOptions}</select>
+    </div>` : ''}
+    ${pendingPeriod === 'custom' ? `
+    <div class="toolbar">
+      <label style="margin:0">Kuanzia</label><input type="date" id="logFromDate" value="${pendingFrom}">
+      <label style="margin:0">Hadi</label><input type="date" id="logToDate" value="${pendingTo}">
+    </div>` : ''}
+    <div class="toolbar">
+      <label style="margin:0">Moduli</label>
+      <select id="logModuleSelect" style="margin-top:0;width:auto">
+        <option value="">Zote</option>
+        ${moduleOptions}
+      </select>
+      <label style="margin:0">Tafuta</label>
+      <input type="text" id="logSearchInput" placeholder="Mfano: jina la mtumiaji, bidhaa..." value="${pendingSearch}" style="margin-top:0;width:220px">
+      <button class="btn-primary btn-sm" style="margin-top:0" onclick="applyFilter()"><i class="bi bi-funnel-fill"></i> Chuja</button>
+    </div>
+  `;
+
+  if (lastLog) {
+    html += `
+      <div class="table-wrap">
+        <table>
+          <tr><th>Tarehe</th><th>Mtumiaji</th><th>Moduli</th><th>Kitendo</th><th>Maelezo</th></tr>
+          ${lastLog.logs.map(l => {
+            const meta = actionMeta[l.action] || { label: l.action, icon: 'bi-dot', color: 'var(--muted)' };
+            return `
+              <tr>
+                <td style="white-space:nowrap">${fdate(l.created_at)}</td>
+                <td>${l.admin_name || '-'}</td>
+                <td>${moduleLabels[l.module] || l.module}</td>
+                <td><i class="bi ${meta.icon}" style="color:${meta.color}"></i> ${meta.label}</td>
+                <td>${l.description}</td>
+              </tr>
+            `;
+          }).join('') || '<tr><td colspan="5" class="muted">Hakuna shughuli zilizorekodiwa kwenye kipindi hiki.</td></tr>'}
+        </table>
+      </div>
+    `;
+  }
+
+  content.innerHTML = html;
+}
+
+loadPage();
+</script>
+</body>
+</html>

@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stock - FRESH SCENTS</title>
+<link rel="stylesheet" href="css/admin.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="icon" href="images/logo.jpeg">
+</head>
+<body>
+<div class="admin-wrap" id="adminWrap"></div>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script>
+let currentAdmin = null;
+let variantAddAc = null;
+let importRows = [];
+let editingStockInId = null;
+let lastStockHistory = [];
+
+// Kichujio cha muda kwa "Bidhaa Zilizopo Stoo" (Stock)
+let stockPendingPeriod = 'today';
+let stockPendingYear = new Date().getFullYear();
+let stockPendingFrom = new Date().toISOString().slice(0, 8) + '01';
+let stockPendingTo = new Date().toISOString().slice(0, 10);
+let lastStockReport = null;
+
+async function loadPage() {
+  currentAdmin = await initAdminShell({ activePage: 'stock.html', pageTitle: 'Stock' });
+  if (!currentAdmin) return;
+  renderShell();
+  await applyStockFilter();
+  if (isAdminOrAbove(currentAdmin)) {
+    await loadVariantsForAdd();
+    await loadHistory();
+  }
+}
+
+function renderShell() {
+  const isAdmin = isAdminOrAbove(currentAdmin);
+  let html = '';
+
+  if (isAdmin) {
+    html += `
+      <div id="alertBox"></div>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3 id="addStockTitle" style="margin-top:0;color:var(--gold-dark)"><i class="bi bi-box-arrow-in-down"></i> Ongeza Stock Mpya</h3>
+          <form id="addStockForm">
+            <div id="variantPickWrap">
+              <label>Tafuta / Chagua Bidhaa na Ukubwa (ML)</label>
+              <div id="variantAddAcWrap"></div>
+            </div>
+            <div id="variantFixedWrap" class="hidden">
+              <label>Bidhaa</label>
+              <input type="text" id="variantFixedName" disabled>
+            </div>
+            <div class="form-row">
+              <div><label>Idadi Inayoingia</label><input type="number" id="quantity" required></div>
+              <div><label>Bei ya Ununuzi (kwa kimoja)</label><input type="number" step="0.01" id="costPrice"></div>
+            </div>
+            <div class="form-row">
+              <div><label>Muuzaji/Supplier</label><input type="text" id="supplier"></div>
+              <div><label>Tarehe</label><input type="date" id="stockDate"></div>
+            </div>
+            <label>Maelezo</label>
+            <textarea id="notes"></textarea>
+            <div style="display:flex;gap:10px;margin-top:14px">
+              <button class="btn-primary" id="addStockSubmitBtn" style="flex:1" type="submit">Hifadhi Stock</button>
+              <button class="btn-secondary hidden" id="addStockCancelBtn" type="button" onclick="cancelEditStockIn()">Ghairi</button>
+            </div>
+          </form>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0;color:var(--gold-dark)"><i class="bi bi-file-earmark-spreadsheet"></i> Pakia Stock kutoka Excel</h3>
+          <p class="muted" style="margin-top:0">Kama umepata orodha ya bidhaa kutoka kwa muuzaji (vendor) kwa mfumo wa Excel, unaweza kuipakia hapa badala ya kuandika kila bidhaa mmoja mmoja.</p>
+          <button type="button" class="btn-secondary" style="width:100%" onclick="downloadTemplate()"><i class="bi bi-download"></i> Pakua Kiolezo cha Excel</button>
+          <hr style="margin:14px 0;border-color:#eee2c5">
+          <label>Chagua Faili la Excel (.xlsx) au CSV Lililojazwa</label>
+          <input type="file" id="importFile" accept=".xlsx,.csv">
+          <button type="button" class="btn-primary" style="width:100%;margin-top:10px" onclick="previewImport()">Onyesha Preview</button>
+          <div id="importAlertBox" style="margin-top:10px"></div>
+        </div>
+      </div>
+
+      <div id="importPreviewWrap" class="card hidden" style="margin-top:16px">
+        <h3 style="margin-top:0;color:var(--gold-dark)"><i class="bi bi-eye"></i> Preview ya Uingizaji wa Stock</h3>
+        <p class="muted">Angalia taarifa hapa chini kabla ya kuthibitisha. Unaweza kuhariri Idadi na Bei ya Kuuza kama kuna makosa.</p>
+        <div class="table-wrap">
+          <table>
+            <tr><th>Bidhaa</th><th>ML</th><th>Idadi</th><th>Bei ya Ununuzi Jumla</th><th>Bei ya Kuuza</th><th>Hali</th></tr>
+            <tbody id="importPreviewTbody"></tbody>
+          </table>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <button type="button" class="btn-primary" onclick="confirmImport()"><i class="bi bi-check2-circle"></i> Thibitisha Uingizaji</button>
+          <button type="button" class="btn-secondary" onclick="cancelImportPreview()">Ghairi</button>
+        </div>
+      </div>
+      <br>
+    `;
+  } else {
+    html += `<p class="muted" style="margin-top:-6px;margin-bottom:16px">Hapa unaona bidhaa zilizopo stoo kwa ajili ya kuuza. Kuongeza stock mpya ni kazi ya Msimamizi.</p>`;
+  }
+
+  html += `<div id="stockSectionWrap"></div>`;
+
+  if (isAdmin) {
+    html += `
+      <br>
+      <div class="page-header"><h2>Historia ya Stock Zilizoingia</h2></div>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Bidhaa</th><th>ML</th><th>Idadi</th><th>Bei ya Ununuzi</th><th>Muuzaji</th><th>Tarehe</th><th>Maelezo</th><th>Vitendo</th></tr>
+          <tbody id="historyTbody"></tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  document.getElementById('pageContent').innerHTML = html;
+
+  if (isAdmin) {
+    document.getElementById('stockDate').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('addStockForm').addEventListener('submit', submitAddStock);
+  }
+}
+
+/* ================= Kichujio cha Muda + Muhtasari wa Fedha kwa Stock ================= */
+
+function selectStockPeriod(period) {
+  stockPendingPeriod = period;
+  renderStockSection();
+}
+
+function setStockYear(v) { stockPendingYear = parseInt(v); }
+function setStockFrom(v) { stockPendingFrom = v; }
+function setStockTo(v) { stockPendingTo = v; }
+
+async function applyStockFilter() {
+  if (stockPendingPeriod === 'yearly') {
+    const el = document.getElementById('stockYearSelect');
+    if (el) stockPendingYear = parseInt(el.value);
+  }
+  if (stockPendingPeriod === 'custom') {
+    const f = document.getElementById('stockFromDate');
+    const t = document.getElementById('stockToDate');
+    if (f) stockPendingFrom = f.value;
+    if (t) stockPendingTo = t.value;
+  }
+
+  const params = { action: 'current', period: stockPendingPeriod };
+  if (stockPendingPeriod === 'yearly') params.year = stockPendingYear;
+  if (stockPendingPeriod === 'custom') { params.from = stockPendingFrom; params.to = stockPendingTo; }
+
+  const r = await apiGet('stock.php', params);
+  if (!r.success) return;
+  if (r.year) stockPendingYear = r.year;
+  lastStockReport = r;
+  renderStockSection();
+}
+
+function exportStock(format) {
+  const params = new URLSearchParams({ action: 'current', period: stockPendingPeriod, export: format });
+  if (stockPendingPeriod === 'yearly') params.set('year', stockPendingYear);
+  if (stockPendingPeriod === 'custom') { params.set('from', stockPendingFrom); params.set('to', stockPendingTo); }
+  window.location.href = `${API_BASE}/stock.php?${params.toString()}`;
+}
+
+function renderStockSection() {
+  const wrap = document.getElementById('stockSectionWrap');
+  if (!wrap) return;
+
+  const periodBtn = (p, label) => `<a href="#" onclick="selectStockPeriod('${p}');return false;" class="btn-${stockPendingPeriod === p ? 'primary' : 'secondary'} btn-sm">${label}</a>`;
+  const years = (lastStockReport && lastStockReport.available_years) || [stockPendingYear];
+  const yearOptions = years.map(y => `<option value="${y}" ${y === stockPendingYear ? 'selected' : ''}>${y}</option>`).join('');
+
+  let html = `
+    <div class="page-header"><h2>Bidhaa Zilizopo Stoo${lastStockReport ? ' — ' + lastStockReport.label : ''}</h2></div>
+
+    <div class="toolbar">
+      ${periodBtn('today', 'Sasa Hivi')}
+      ${periodBtn('daily', 'Siku')}
+      ${periodBtn('weekly', 'Wiki')}
+      ${periodBtn('monthly', 'Mwezi')}
+      ${periodBtn('yearly', 'Mwaka')}
+      ${periodBtn('custom', 'Kipindi Maalum')}
+    </div>
+
+    ${stockPendingPeriod === 'yearly' ? `
+    <div class="toolbar">
+      <label style="margin:0">Chagua Mwaka</label>
+      <select id="stockYearSelect" style="margin-top:0;width:auto">${yearOptions}</select>
+    </div>` : ''}
+
+    ${stockPendingPeriod === 'custom' ? `
+    <div class="toolbar">
+      <label style="margin:0">Kuanzia</label><input type="date" id="stockFromDate" value="${stockPendingFrom}">
+      <label style="margin:0">Hadi</label><input type="date" id="stockToDate" value="${stockPendingTo}">
+    </div>` : ''}
+
+    <div class="toolbar">
+      <button class="btn-primary btn-sm" style="margin-top:0" onclick="applyStockFilter()"><i class="bi bi-funnel-fill"></i> Chuja</button>
+      <span class="muted" style="margin-left:16px;margin-right:4px">Pakua Orodha Hii:</span>
+      <a href="#" onclick="exportStock('pdf');return false;" class="btn-secondary btn-sm"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+      <a href="#" onclick="exportStock('excel');return false;" class="btn-secondary btn-sm"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+    </div>
+  `;
+
+  if (lastStockReport) {
+    const s = lastStockReport.summary;
+    html += `
+      <div class="grid grid-4">
+        <div class="stat-card"><div class="label">Bidhaa Zenye Stock</div><div class="value">${s.total_products}</div></div>
+        <div class="stat-card"><div class="label">Thamani ya Stock (Ununuzi)</div><div class="value">${money(s.buying_value)}</div></div>
+        <div class="stat-card success"><div class="label">Thamani ya Stock (Kuuza)</div><div class="value">${money(s.selling_value)}</div></div>
+        <div class="stat-card info"><div class="label">Faida Inayotarajiwa</div><div class="value">${money(s.expected_profit)}</div></div>
+      </div>
+      <p class="muted" style="font-size:11px">Bei zinazotumika kwenye mahesabu haya ni bei za SASA za bidhaa.</p>
+
+      <div class="table-wrap">
+        <table>
+          <tr><th>Bidhaa</th><th>ML</th><th>Bei</th><th>Stock Iliyopo</th></tr>
+          ${lastStockReport.stock.filter(s2 => s2.stock_qty > 0).map(s2 => `
+            <tr>
+              <td>${s2.name} <span class="muted">(${s2.brand || ''})</span></td>
+              <td>${s2.ml}ml</td>
+              <td>${money(s2.price)}</td>
+              <td><strong style="${s2.stock_qty <= 5 ? 'color:var(--danger)' : ''}">${s2.stock_qty}</strong></td>
+            </tr>
+          `).join('') || '<tr><td colspan="4" class="muted">Hakuna bidhaa zenye stock kwenye kipindi hiki.</td></tr>'}
+        </table>
+      </div>
+    `;
+  } else {
+    html += '<p class="muted">Inapakia...</p>';
+  }
+
+  wrap.innerHTML = html;
+}
+
+async function loadVariantsForAdd() {
+  const r = await apiGet('stock.php', { action: 'variants_for_add' });
+  if (!r.success) return;
+  if (!variantAddAc) {
+    variantAddAc = createAutocomplete({
+      wrapEl: document.getElementById('variantAddAcWrap'),
+      items: r.variants,
+      placeholder: 'Andika jina la bidhaa au bonyeza kuona zote...',
+      noResultsText: 'Bidhaa hii haipo — unaweza kuiongeza kwenye Bidhaa (Products) kwanza.',
+      getSearchText: v => `${v.name} ${v.brand || ''} ${v.ml}`,
+      getLabel: v => `${v.name} — ${v.ml}ml`,
+      getSub: v => `Stock ya sasa: ${v.stock_qty}`,
+    });
+  } else {
+    variantAddAc.setItems(r.variants);
+  }
+}
+
+async function loadHistory() {
+  const r = await apiGet('stock.php', { action: 'history' });
+  if (!r.success) return;
+  lastStockHistory = r.history;
+  document.getElementById('historyTbody').innerHTML = r.history.map(h => `
+    <tr>
+      <td>${h.product_name}</td>
+      <td>${h.ml}ml</td>
+      <td>${h.quantity}</td>
+      <td>${money(h.cost_price)}</td>
+      <td>${h.supplier || '-'}</td>
+      <td>${fdateOnly(h.stock_date)}</td>
+      <td>${h.notes || '-'}</td>
+      <td>
+        <button class="btn-outline btn-sm" onclick='openEditStockIn(${JSON.stringify(h)})'>Hariri</button>
+        <button class="btn-danger btn-sm" onclick="deleteStockIn(${h.id})">Futa</button>
+      </td>
+    </tr>
+  `).join('') || '<tr><td colspan="8" class="muted">Hakuna historia bado.</td></tr>';
+}
+
+function openEditStockIn(h) {
+  editingStockInId = h.id;
+  document.getElementById('addStockTitle').innerHTML = '<i class="bi bi-pencil-square"></i> Hariri Rekodi ya Stock';
+  document.getElementById('variantPickWrap').classList.add('hidden');
+  document.getElementById('variantFixedWrap').classList.remove('hidden');
+  document.getElementById('variantFixedName').value = `${h.product_name} — ${h.ml}ml`;
+  document.getElementById('quantity').value = h.quantity;
+  document.getElementById('costPrice').value = h.cost_price;
+  document.getElementById('supplier').value = h.supplier || '';
+  document.getElementById('stockDate').value = h.stock_date;
+  document.getElementById('notes').value = h.notes || '';
+  document.getElementById('addStockSubmitBtn').textContent = 'Sasisha Stock';
+  document.getElementById('addStockCancelBtn').classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function cancelEditStockIn() {
+  editingStockInId = null;
+  document.getElementById('addStockTitle').innerHTML = '<i class="bi bi-box-arrow-in-down"></i> Ongeza Stock Mpya';
+  document.getElementById('variantPickWrap').classList.remove('hidden');
+  document.getElementById('variantFixedWrap').classList.add('hidden');
+  document.getElementById('addStockForm').reset();
+  document.getElementById('stockDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('addStockSubmitBtn').textContent = 'Hifadhi Stock';
+  document.getElementById('addStockCancelBtn').classList.add('hidden');
+  if (variantAddAc) variantAddAc.clear();
+}
+
+async function deleteStockIn(id) {
+  if (!confirm('Una uhakika unataka kufuta rekodi hii ya stock? Stock husika itapunguzwa.')) return;
+  const r = await apiGet('stock.php', { action: 'delete_stock_in', id });
+  if (!r.success) { alert(r.message); return; }
+  await applyStockFilter();
+  await loadVariantsForAdd();
+  await loadHistory();
+}
+
+async function submitAddStock(e) {
+  e.preventDefault();
+  const box = document.getElementById('alertBox');
+
+  if (editingStockInId) {
+    const payload = {
+      id: editingStockInId,
+      quantity: parseInt(document.getElementById('quantity').value),
+      cost_price: parseFloat(document.getElementById('costPrice').value) || 0,
+      supplier: document.getElementById('supplier').value.trim(),
+      stock_date: document.getElementById('stockDate').value,
+      notes: document.getElementById('notes').value.trim(),
+    };
+    const r = await apiPost('stock.php', payload, 'update_stock_in');
+    box.innerHTML = `<div class="alert ${r.success ? 'alert-success' : 'alert-error'}">${r.message}</div>`;
+    if (r.success) {
+      cancelEditStockIn();
+      await applyStockFilter();
+      await loadVariantsForAdd();
+      await loadHistory();
+    }
+    return;
+  }
+
+  const v = variantAddAc ? variantAddAc.getSelected() : null;
+  if (!v) {
+    box.innerHTML = '<div class="alert alert-error">Tafadhali chagua bidhaa kwanza kwenye orodha ya utafutaji.</div>';
+    return;
+  }
+  const payload = {
+    variant_id: v.id,
+    quantity: parseInt(document.getElementById('quantity').value),
+    cost_price: parseFloat(document.getElementById('costPrice').value) || 0,
+    supplier: document.getElementById('supplier').value.trim(),
+    stock_date: document.getElementById('stockDate').value,
+    notes: document.getElementById('notes').value.trim(),
+  };
+  const r = await apiPost('stock.php', payload, 'add');
+  box.innerHTML = `<div class="alert ${r.success ? 'alert-success' : 'alert-error'}">${r.message}</div>`;
+  if (r.success) {
+    document.getElementById('addStockForm').reset();
+    document.getElementById('stockDate').value = new Date().toISOString().slice(0, 10);
+    if (variantAddAc) variantAddAc.clear();
+    await applyStockFilter();
+    await loadVariantsForAdd();
+    await loadHistory();
+  }
+}
+
+/* ================= Excel Import kwa Stock ================= */
+
+function downloadTemplate() {
+  window.location.href = `${API_BASE}/stock.php?action=template`;
+}
+
+async function previewImport() {
+  const fileInput = document.getElementById('importFile');
+  const box = document.getElementById('importAlertBox');
+  if (!fileInput.files.length) {
+    box.innerHTML = '<div class="alert alert-error">Tafadhali chagua faili kwanza.</div>';
+    return;
+  }
+  const fd = new FormData();
+  fd.append('file', fileInput.files[0]);
+  box.innerHTML = '<div class="alert">Inasoma faili, subiri kidogo...</div>';
+
+  const r = await apiPostForm('stock.php', fd, 'import_preview');
+  if (!r.success) {
+    box.innerHTML = `<div class="alert alert-error">${r.message}</div>`;
+    return;
+  }
+  box.innerHTML = '';
+  importRows = r.rows;
+  renderImportPreview();
+}
+
+function renderImportPreview() {
+  const wrap = document.getElementById('importPreviewWrap');
+  wrap.classList.remove('hidden');
+  document.getElementById('importPreviewTbody').innerHTML = importRows.map((row, idx) => {
+    const hasErrors = row.errors && row.errors.length;
+    const statusBadge = row.status === 'existing'
+      ? '<span class="badge import-status-existing">Ipo Tayari</span>'
+      : '<span class="badge import-status-new">Mpya</span>';
+    return `
+      <tr class="${hasErrors ? 'import-row-error' : ''}">
+        <td>
+          <input class="preview-input" value="${row.name}" oninput="updateImportRow(${idx}, 'name', this.value)">
+        </td>
+        <td><input class="preview-input" style="width:70px" type="number" value="${row.ml}" oninput="updateImportRow(${idx}, 'ml', this.value)"></td>
+        <td><input class="preview-input" style="width:70px" type="number" value="${row.quantity}" oninput="updateImportRow(${idx}, 'quantity', this.value)"></td>
+        <td><input class="preview-input" style="width:110px" type="number" value="${row.amount}" oninput="updateImportRow(${idx}, 'amount', this.value)"></td>
+        <td><input class="preview-input" style="width:110px" type="number" value="${row.selling_price}" oninput="updateImportRow(${idx}, 'selling_price', this.value)"></td>
+        <td>${statusBadge}${hasErrors ? `<div class="field-error">${row.errors.join(' ')}</div>` : ''}</td>
+      </tr>
+    `;
+  }).join('') || '<tr><td colspan="6" class="muted">Hakuna mistari ya kuonyesha.</td></tr>';
+}
+
+function updateImportRow(idx, field, value) {
+  if (field === 'name') importRows[idx][field] = value;
+  else importRows[idx][field] = parseFloat(value) || 0;
+}
+
+function cancelImportPreview() {
+  importRows = [];
+  document.getElementById('importPreviewWrap').classList.add('hidden');
+  document.getElementById('importFile').value = '';
+}
+
+async function confirmImport() {
+  const box = document.getElementById('importAlertBox');
+  const invalidRows = importRows.filter(r => !r.name || r.ml <= 0 || r.quantity <= 0 || r.selling_price <= 0);
+  if (invalidRows.length) {
+    box.innerHTML = '<div class="alert alert-error">Kuna mistari yenye makosa (jina, ML, idadi au bei ya kuuza haipo/si sahihi). Tafadhali sahihisha kabla ya kuthibitisha.</div>';
+    return;
+  }
+  box.innerHTML = '<div class="alert">Inaingiza stock, subiri...</div>';
+  const r = await apiPost('stock.php', { rows: importRows }, 'import_confirm');
+  box.innerHTML = `<div class="alert ${r.success ? 'alert-success' : 'alert-error'}">${r.message}</div>`;
+  if (r.success) {
+    cancelImportPreview();
+    await applyStockFilter();
+    await loadVariantsForAdd();
+    await loadHistory();
+  }
+}
+
+loadPage();
+</script>
+</body>
+</html>

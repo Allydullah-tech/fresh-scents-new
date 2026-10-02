@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Watumiaji wa Mfumo - FRESH SCENTS</title>
+<link rel="stylesheet" href="css/admin.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="icon" href="images/logo.jpeg">
+</head>
+<body>
+<div class="admin-wrap" id="adminWrap"></div>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script>
+const ROLE_LABELS_LOCAL = { super_admin: 'Msimamizi Mkuu', admin: 'Msimamizi', worker: 'Mfanyakazi' };
+let myAdminId = null;
+
+async function loadPage() {
+  const admin = await initAdminShell({ activePage: 'admins.html', pageTitle: 'Watumiaji wa Mfumo' });
+  if (!admin) return;
+  if (!requireRole(admin, ['super_admin'])) return;
+  myAdminId = admin.id;
+  renderShell();
+  await loadAdmins();
+}
+
+function renderShell() {
+  document.getElementById('pageContent').innerHTML = `
+    <div id="alertBox"></div>
+    <div class="page-header">
+      <h2 id="adminCount">Watumiaji wa Mfumo</h2>
+      <button class="btn-primary" onclick="document.getElementById('modalBg').classList.remove('hidden')">+ Ongeza Mtumiaji</button>
+    </div>
+    <p class="muted" style="margin-top:-10px;margin-bottom:16px">Msimamizi Mkuu/Msimamizi wana ufikiaji kamili. Mfanyakazi (Worker) anaweza tu kurekodi mauzo, matumizi, uharibifu, na kuona stock iliyopo.</p>
+
+    <div class="table-wrap">
+      <table>
+        <tr><th>Jina</th><th>Username</th><th>Cheo</th><th>Hali</th><th>Aliingia Mwisho</th><th>Vitendo</th></tr>
+        <tbody id="adminsTbody"></tbody>
+      </table>
+    </div>
+
+    <div class="modal-bg hidden" id="modalBg">
+      <div class="modal">
+        <span class="close-x" onclick="document.getElementById('modalBg').classList.add('hidden')">&times;</span>
+        <h3>Ongeza Mtumiaji Mpya</h3>
+        <form id="addForm">
+          <label>Jina Kamili</label>
+          <input type="text" id="f_name" required>
+          <label>Username</label>
+          <input type="text" id="f_username" required>
+          <label>Password</label>
+          <div class="password-field">
+            <input type="password" id="f_password" required>
+            <button type="button" class="password-toggle-btn" onclick="togglePasswordField(this)" tabindex="-1"><i class="bi bi-eye"></i></button>
+          </div>
+          <label>Cheo</label>
+          <select id="f_role">
+            <option value="worker">Mfanyakazi (Worker) — Mauzo, Matumizi, Uharibifu, Kuona Stock tu</option>
+            <option value="admin">Msimamizi — Ufikiaji Kamili (isipokuwa kusimamia wasimamizi wengine)</option>
+            <option value="super_admin">Msimamizi Mkuu — Ufikiaji Kamili wa Mfumo</option>
+          </select>
+          <label>Swali la Usalama</label>
+          <select id="secQSelect" onchange="onSecQChange()" required>
+            <option value="">-- Chagua Swali --</option>
+            <option value="Jina la mnyama wako wa kwanza ni nani?">Jina la mnyama wako wa kwanza ni nani?</option>
+            <option value="Ulizaliwa mji/kijiji gani?">Ulizaliwa mji/kijiji gani?</option>
+            <option value="Jina la shule yako ya msingi ni lipi?">Jina la shule yako ya msingi ni lipi?</option>
+            <option value="Chakula unachokipenda zaidi ni kipi?">Chakula unachokipenda zaidi ni kipi?</option>
+            <option value="Jina la rafiki yako wa karibu utotoni ni nani?">Jina la rafiki yako wa karibu utotoni ni nani?</option>
+            <option value="Jina la kati la mzazi wako ni lipi?">Jina la kati la mzazi wako ni lipi?</option>
+            <option value="__custom__">Swali Langu Mwenyewe (Andika)</option>
+          </select>
+          <input type="text" id="secQCustom" class="hidden" placeholder="Andika swali lako hapa" style="margin-top:10px">
+          <label>Jibu la Swali la Usalama</label>
+          <input type="text" id="f_answer" required>
+          <button type="submit" class="btn-primary" style="width:100%;margin-top:16px">Ongeza Mtumiaji</button>
+        </form>
+      </div>
+    </div>
+  `;
+  document.getElementById('addForm').addEventListener('submit', submitAdd);
+}
+
+function onSecQChange() {
+  const sel = document.getElementById('secQSelect');
+  document.getElementById('secQCustom').classList.toggle('hidden', sel.value !== '__custom__');
+}
+function getSecurityQuestion() {
+  const sel = document.getElementById('secQSelect');
+  return sel.value === '__custom__' ? document.getElementById('secQCustom').value.trim() : sel.value;
+}
+
+async function loadAdmins() {
+  const r = await apiGet('admins.php', { action: 'list' });
+  if (!r.success) return;
+  document.getElementById('adminCount').textContent = `Watumiaji wa Mfumo (${r.admins.length})`;
+  document.getElementById('adminsTbody').innerHTML = r.admins.map(a => `
+    <tr>
+      <td>${a.full_name}</td><td>${a.username}</td><td>${ROLE_LABELS_LOCAL[a.role] || a.role}</td>
+      <td><span class="badge ${a.status === 'active' ? 'badge-completed' : 'badge-cancelled'}">${a.status === 'active' ? 'Hai' : 'Amezimwa'}</span></td>
+      <td>${fdate(a.last_login)}</td>
+      <td>${a.id != myAdminId ? `
+          <button class="btn-outline btn-sm" onclick="toggleAdmin(${a.id})">${a.status === 'active' ? 'Zima' : 'Washa'}</button>
+          <button class="btn-danger btn-sm" onclick="deleteAdmin(${a.id})">Futa</button>
+        ` : '<span class="muted">(Wewe)</span>'}
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function submitAdd(e) {
+  e.preventDefault();
+  const security_question = getSecurityQuestion();
+  if (!security_question) { alert('Tafadhali chagua au andika swali la usalama.'); return; }
+
+  const payload = {
+    full_name: document.getElementById('f_name').value.trim(),
+    username: document.getElementById('f_username').value.trim(),
+    password: document.getElementById('f_password').value,
+    role: document.getElementById('f_role').value,
+    security_question,
+    security_answer: document.getElementById('f_answer').value.trim(),
+  };
+
+  const r = await apiPost('admins.php', payload, 'add');
+  document.getElementById('alertBox').innerHTML = `<div class="alert ${r.success ? 'alert-success' : 'alert-error'}">${r.message}</div>`;
+  if (r.success) {
+    document.getElementById('modalBg').classList.add('hidden');
+    document.getElementById('addForm').reset();
+    await loadAdmins();
+  }
+}
+
+async function toggleAdmin(id) {
+  await apiGet('admins.php', { action: 'toggle', id });
+  await loadAdmins();
+}
+
+async function deleteAdmin(id) {
+  if (!confirm('Futa mtumiaji huyu?')) return;
+  await apiGet('admins.php', { action: 'delete', id });
+  await loadAdmins();
+}
+
+loadPage();
+</script>
+</body>
+</html>

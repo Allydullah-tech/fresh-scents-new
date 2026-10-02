@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Usakinishaji - FRESH SCENTS</title>
+<link rel="stylesheet" href="css/admin.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="icon" href="images/logo.jpeg">
+<style>
+ body{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#1a1408,#2b2118);}
+ .install-box{max-width:460px;width:92%;background:#fffdf8;border-radius:16px;padding:32px;box-shadow:0 20px 60px rgba(0,0,0,.4);}
+ .install-box h1{font-size:18px;color:#8a6d1f;margin-bottom:4px;text-align:center}
+ .install-box p.sub{text-align:center;color:#8a7d5f;margin-bottom:20px;font-size:12.5px}
+ .logo-wrap{text-align:center;margin-bottom:12px}
+ .logo-wrap img{width:64px}
+</style>
+</head>
+<body>
+<div class="install-box">
+  <div class="logo-wrap"><img src="images/logo.jpeg" alt="Fresh Scents"></div>
+  <h1>Usakinishaji wa Mfumo</h1>
+  <p class="sub">Karibu FRESH SCENTS &mdash; tengeneza akaunti ya kwanza ya Msimamizi Mkuu (Super Admin)</p>
+
+  <div id="alertBox"></div>
+
+  <form id="installForm">
+    <label>Jina la Duka</label>
+    <input type="text" name="shop_name" value="FRESH SCENTS" required>
+
+    <label>Namba ya Simu ya Duka</label>
+    <input type="text" name="shop_phone" placeholder="0621002091">
+
+    <label>Anuani ya Duka</label>
+    <input type="text" name="shop_address" placeholder="Mfano: Mbeya, Tanzania">
+
+    <hr style="margin:16px 0;border-color:#eee2c5">
+
+    <label>Jina Kamili la Msimamizi</label>
+    <input type="text" name="full_name" required>
+
+    <label>Jina la Kuingilia (Username)</label>
+    <input type="text" name="username" required>
+
+    <label>Password</label>
+    <div class="password-field">
+      <input type="password" name="password" required>
+      <button type="button" class="password-toggle-btn" onclick="togglePasswordField(this)" tabindex="-1"><i class="bi bi-eye"></i></button>
+    </div>
+
+    <label>Rudia Password</label>
+    <div class="password-field">
+      <input type="password" name="confirm_password" required>
+      <button type="button" class="password-toggle-btn" onclick="togglePasswordField(this)" tabindex="-1"><i class="bi bi-eye"></i></button>
+    </div>
+
+    <label>Swali la Usalama</label>
+    <select id="secQSelect" onchange="onSecQChange()" required>
+      <option value="">-- Chagua Swali --</option>
+      <option value="Jina la mnyama wako wa kwanza ni nani?">Jina la mnyama wako wa kwanza ni nani?</option>
+      <option value="Ulizaliwa mji/kijiji gani?">Ulizaliwa mji/kijiji gani?</option>
+      <option value="Jina la shule yako ya msingi ni lipi?">Jina la shule yako ya msingi ni lipi?</option>
+      <option value="Chakula unachokipenda zaidi ni kipi?">Chakula unachokipenda zaidi ni kipi?</option>
+      <option value="Jina la rafiki yako wa karibu utotoni ni nani?">Jina la rafiki yako wa karibu utotoni ni nani?</option>
+      <option value="Jina la kati la mzazi wako ni lipi?">Jina la kati la mzazi wako ni lipi?</option>
+      <option value="__custom__">Swali Langu Mwenyewe (Andika)</option>
+    </select>
+    <input type="text" id="secQCustom" class="hidden" placeholder="Andika swali lako hapa" style="margin-top:8px">
+
+    <label>Jibu la Swali la Usalama</label>
+    <input type="text" name="security_answer" required>
+
+    <button type="submit" class="btn-primary" style="width:100%;margin-top:16px">Tengeneza Akaunti</button>
+  </form>
+  <p style="text-align:center;margin-top:16px;font-size:12px"><a href="index.html">&larr; Rudi Mwanzo</a></p>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+function onSecQChange() {
+  const sel = document.getElementById('secQSelect');
+  document.getElementById('secQCustom').classList.toggle('hidden', sel.value !== '__custom__');
+}
+function getSecurityQuestion() {
+  const sel = document.getElementById('secQSelect');
+  return sel.value === '__custom__' ? document.getElementById('secQCustom').value.trim() : sel.value;
+}
+
+async function checkInstalled() {
+  const r = await apiGet('install.php', { action: 'status' });
+  if (r.success && r.installed) {
+    document.querySelector('.install-box').innerHTML = `
+      <div class="logo-wrap"><img src="images/logo.jpeg" alt="Fresh Scents"></div>
+      <h1>Mfumo Tayari Umesakinishwa</h1>
+      <p class="sub" style="text-align:center">Akaunti ya msimamizi tayari ipo.</p>
+      <a href="login.html" class="btn-primary" style="display:block;text-align:center;text-decoration:none">Nenda Kuingia</a>`;
+  }
+}
+checkInstalled();
+
+document.getElementById('installForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const box = document.getElementById('alertBox');
+  const security_question = getSecurityQuestion();
+  if (!security_question) { box.innerHTML = '<div class="alert alert-error">Tafadhali chagua au andika swali la usalama.</div>'; return; }
+
+  const form = e.target;
+  const payload = {
+    shop_name: form.shop_name.value.trim(),
+    shop_phone: form.shop_phone.value.trim(),
+    shop_address: form.shop_address.value.trim(),
+    full_name: form.full_name.value.trim(),
+    username: form.username.value.trim(),
+    password: form.password.value,
+    confirm_password: form.confirm_password.value,
+    security_question,
+    security_answer: form.security_answer.value.trim(),
+  };
+
+  const r = await apiPost('install.php', payload, 'create');
+  box.innerHTML = `<div class="alert ${r.success ? 'alert-success' : 'alert-error'}">${r.message}</div>`;
+  if (r.success) {
+    setTimeout(() => window.location.href = 'login.html', 1200);
+  }
+});
+</script>
+</body>
+</html>

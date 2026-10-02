@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bidhaa - FRESH SCENTS</title>
+<link rel="stylesheet" href="css/admin.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="icon" href="images/logo.jpeg">
+</head>
+<body>
+<div class="admin-wrap" id="adminWrap"></div>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script>
+let currentAdmin = null;
+let allProducts = [];
+let allCategories = [];
+let variantRowCount = 0;
+
+async function loadPage() {
+  currentAdmin = await initAdminShell({ activePage: 'products.html', pageTitle: 'Bidhaa (Manukato)' });
+  if (!currentAdmin) return;
+  if (!requireRole(currentAdmin, ['super_admin', 'admin'])) return;
+
+  renderShell();
+  await loadProducts();
+}
+
+function renderShell() {
+  document.getElementById('pageContent').innerHTML = `
+    <div class="page-header">
+      <h2 id="productCount">Bidhaa Zote</h2>
+      <button class="btn-primary" onclick="openAdd()">+ Ongeza Bidhaa Mpya</button>
+    </div>
+    <div class="toolbar">
+      <input type="text" id="searchBox" placeholder="Tafuta bidhaa au brand...">
+      <button class="btn-secondary" onclick="loadProducts()">Tafuta</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Picha</th><th>Jina</th><th>Brand</th><th>Ukubwa (ML) na Bei</th><th>Stock Jumla</th><th>Aina</th><th>Hali</th><th>Vitendo</th></tr>
+        <tbody id="productsTbody"></tbody>
+      </table>
+    </div>
+
+    <div class="modal-bg hidden" id="modalBg">
+      <div class="modal" style="max-width:620px">
+        <span class="close-x" onclick="closeModal()">&times;</span>
+        <h3 id="modalTitle">Ongeza Bidhaa Mpya</h3>
+        <form id="productForm">
+          <input type="hidden" id="f_id">
+          <input type="hidden" id="f_deleted_variants" value="">
+
+          <label>Jina la Bidhaa</label>
+          <input type="text" id="f_name" required>
+
+          <div class="form-row">
+            <div><label>Brand</label><input type="text" id="f_brand" value="Fresh Scents"></div>
+            <div><label>Aina (Category)</label><select id="f_category"><option value="">-- Chagua --</option></select></div>
+          </div>
+
+          <label>Maelezo</label>
+          <textarea id="f_description"></textarea>
+
+          <div class="form-row">
+            <div><label>Hali</label>
+              <select id="f_status">
+                <option value="active">Inauzwa</option>
+                <option value="inactive">Imezimwa</option>
+              </select>
+            </div>
+            <div><label>Picha ya Bidhaa</label><input type="file" id="f_image" accept="image/*"></div>
+          </div>
+
+          <hr style="margin:18px 0;border-color:#eee2c5">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <label style="margin:0">Ukubwa (ML) na Bei za Bidhaa Hii</label>
+            <button type="button" class="btn-outline btn-sm" onclick="addVariantRow()">+ Ongeza Ukubwa Mwingine</button>
+          </div>
+          <p class="muted" style="font-size:12.5px;margin:4px 0 10px">Mfano: 30ml kwa 22,000 TZS, 50ml kwa 32,000 TZS.</p>
+          <div id="variantRows"></div>
+
+          <button type="submit" class="btn-primary" style="width:100%;margin-top:16px">Hifadhi Bidhaa</button>
+        </form>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('productForm').addEventListener('submit', submitProductForm);
+}
+
+async function loadProducts() {
+  const q = document.getElementById('searchBox').value;
+  const r = await apiGet('products.php', { action: 'list', q });
+  if (!r.success) return;
+  allProducts = r.products;
+  allCategories = r.categories;
+
+  const catSelect = document.getElementById('f_category');
+  catSelect.innerHTML = '<option value="">-- Chagua --</option>' + allCategories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+  document.getElementById('productCount').textContent = `Bidhaa Zote (${allProducts.length})`;
+  const tbody = document.getElementById('productsTbody');
+  if (!allProducts.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="muted">Hakuna bidhaa zilizopatikana.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = allProducts.map(p => `
+    <tr>
+      <td>${p.image ? `<img src="../backend/uploads/products/${p.image}" style="width:44px;height:44px;object-fit:cover;border-radius:6px">` : `<i class="bi bi-droplet-half" style="font-size:22px;color:var(--gold)"></i>`}</td>
+      <td>${p.name}</td>
+      <td>${p.brand || ''}</td>
+      <td>${p.variants.length ? p.variants.map(v => `<span class="badge badge-confirmed" style="margin:2px 3px 2px 0">${v.ml}ml — ${money(v.price)}</span>`).join('') : '<span class="muted">Hakuna ukubwa bado</span>'}</td>
+      <td>${p.total_stock}</td>
+      <td>${p.category_name || '-'}</td>
+      <td><span class="badge ${p.status === 'active' ? 'badge-completed' : 'badge-cancelled'}">${p.status === 'active' ? 'Inauzwa' : 'Imezimwa'}</span></td>
+      <td>
+        <button class="btn-outline btn-sm" onclick='openEdit(${p.id})'>Hariri</button>
+        <button class="btn-danger btn-sm" onclick="deleteProduct(${p.id})">Futa</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function addVariantRow(data) {
+  data = data || {};
+  const wrap = document.getElementById('variantRows');
+  const rowId = 'vrow_' + (variantRowCount++);
+  const row = document.createElement('div');
+  row.className = 'form-row';
+  row.id = rowId;
+  row.style.alignItems = 'flex-end';
+  row.style.marginBottom = '10px';
+  row.innerHTML = `
+    <input type="hidden" class="v-id" value="${data.id || ''}">
+    <div><label style="margin-top:0">ML</label><input type="number" class="v-ml" value="${data.ml || ''}" placeholder="Mfano: 50" required></div>
+    <div><label style="margin-top:0">Bei (TZS)</label><input type="number" step="0.01" class="v-price" value="${data.price || ''}" placeholder="Mfano: 30000" required></div>
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <div style="flex:1"><label style="margin-top:0">Stock</label><input type="number" class="v-stock" value="${data.stock_qty !== undefined ? data.stock_qty : ''}" placeholder="0"></div>
+      <button type="button" class="btn-danger btn-sm" style="margin-bottom:2px" onclick="removeVariantRow('${rowId}', '${data.id || ''}')"><i class="bi bi-trash3"></i></button>
+    </div>
+  `;
+  wrap.appendChild(row);
+}
+
+function removeVariantRow(rowId, variantId) {
+  document.getElementById(rowId).remove();
+  if (variantId) {
+    const field = document.getElementById('f_deleted_variants');
+    field.value = field.value ? field.value + ',' + variantId : variantId;
+  }
+}
+
+function resetVariantRows() {
+  document.getElementById('variantRows').innerHTML = '';
+  document.getElementById('f_deleted_variants').value = '';
+}
+
+function openAdd() {
+  document.getElementById('modalTitle').textContent = 'Ongeza Bidhaa Mpya';
+  document.getElementById('f_id').value = '';
+  document.getElementById('f_name').value = '';
+  document.getElementById('f_brand').value = 'Fresh Scents';
+  document.getElementById('f_category').value = '';
+  document.getElementById('f_description').value = '';
+  document.getElementById('f_status').value = 'active';
+  document.getElementById('f_image').value = '';
+  resetVariantRows();
+  addVariantRow();
+  document.getElementById('modalBg').classList.remove('hidden');
+}
+
+function openEdit(id) {
+  const p = allProducts.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('modalTitle').textContent = 'Hariri Bidhaa';
+  document.getElementById('f_id').value = p.id;
+  document.getElementById('f_name').value = p.name;
+  document.getElementById('f_brand').value = p.brand || '';
+  document.getElementById('f_category').value = p.category_id || '';
+  document.getElementById('f_description').value = p.description || '';
+  document.getElementById('f_status').value = p.status;
+  document.getElementById('f_image').value = '';
+  resetVariantRows();
+  if (p.variants.length) p.variants.forEach(v => addVariantRow(v));
+  else addVariantRow();
+  document.getElementById('modalBg').classList.remove('hidden');
+}
+
+function closeModal() { document.getElementById('modalBg').classList.add('hidden'); }
+
+async function submitProductForm(e) {
+  e.preventDefault();
+  const fd = new FormData();
+  fd.append('id', document.getElementById('f_id').value);
+  fd.append('name', document.getElementById('f_name').value);
+  fd.append('brand', document.getElementById('f_brand').value);
+  fd.append('description', document.getElementById('f_description').value);
+  fd.append('category_id', document.getElementById('f_category').value);
+  fd.append('status', document.getElementById('f_status').value);
+  fd.append('deleted_variant_ids', document.getElementById('f_deleted_variants').value);
+
+  const imageInput = document.getElementById('f_image');
+  if (imageInput.files[0]) fd.append('image', imageInput.files[0]);
+
+  document.querySelectorAll('#variantRows .form-row').forEach(row => {
+    fd.append('variant_id[]', row.querySelector('.v-id').value);
+    fd.append('variant_ml[]', row.querySelector('.v-ml').value);
+    fd.append('variant_price[]', row.querySelector('.v-price').value);
+    fd.append('variant_stock[]', row.querySelector('.v-stock').value);
+  });
+
+  const r = await apiPostForm('products.php', fd, 'save');
+  if (!r.success) { alert(r.message); return; }
+  closeModal();
+  await loadProducts();
+}
+
+async function deleteProduct(id) {
+  if (!confirm('Una uhakika unataka kufuta bidhaa hii? Ukubwa/bei zake zote zitafutika pia.')) return;
+  const r = await apiGet('products.php', { action: 'delete', id });
+  await loadProducts();
+}
+
+loadPage();
+</script>
+</body>
+</html>
